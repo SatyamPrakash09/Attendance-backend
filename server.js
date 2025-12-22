@@ -137,6 +137,19 @@ app.get("/attendance/all", async (req, res) => {
   }
 });
 
+app.post("/holiday", async (req, res) => {
+  const today = getTodayIST();
+
+  await Holiday.findOneAndUpdate(
+    { date: today },
+    { reason: "Declared by user" },
+    { upsert: true }
+  );
+
+  res.json({ message: "Holiday saved", date: today });
+});
+
+
 /* ====================================================
    HEALTH CHECK
    ==================================================== */

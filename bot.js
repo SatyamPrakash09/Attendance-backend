@@ -1,13 +1,24 @@
 import "dotenv/config";
 import { connectDB } from "./db.js";
-import Attendance from "./models/Attendance.js";
-import Holiday from "./models/Holiday.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const API_BASE = "https://attendance-backend-hhkn.onrender.com";
 
 await connectDB();
+
+/* -------------------- HELPERS -------------------- */
+function getTodayIST() {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata"
+  });
+}
+
+function getDayIST() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  ).getDay();
+}
 
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
@@ -17,6 +28,7 @@ async function sendMessage(chatId, text) {
   });
 }
 
+/* -------------------- API CALLS -------------------- */
 async function saveAttendance(status, reason = "-") {
   const res = await fetch(`${API_BASE}/attendance`, {
     method: "POST",
@@ -30,6 +42,18 @@ async function saveAttendance(status, reason = "-") {
   }
 }
 
+async function markHoliday() {
+  const res = await fetch(`${API_BASE}/holiday`, {
+    method: "POST"
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error("Holiday not saved");
+  }
+}
+
+/* -------------------- BOT LOOP -------------------- */
 async function getUpdates(offset = 0) {
   const res = await fetch(`${TELEGRAM_API}/getUpdates?offset=${offset}`);
   const data = await res.json();
@@ -42,32 +66,27 @@ async function getUpdates(offset = 0) {
 
     const chatId = update.message.chat.id;
     const text = update.message.text.toLowerCase();
-    function getTodayIST() {
-      return new Date().toLocaleDateString("en-CA", {
-        timeZone: "Asia/Kolkata"
-      });
-    }
 
-    const today = getTodayIST();
+    // Sunday OFF (IST-safe)
+    if (getDayIST() === 0) {
+      offset = update.update_id + 1;
+      continue;
+    }
 
     if (text === "/test") {
       await sendMessage(
         chatId,
         "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
       );
-      offset = update.update_id + 1;
-      continue;
     }
 
-    if (new Date().getDay() === 0) continue; // Sunday OFF
-
-    if (text === "holiday") {
-      await Holiday.updateOne(
-        { date: today },
-        { reason: "Declared by user" },
-        { upsert: true }
-      );
-      await sendMessage(chatId, "📅 Marked today as HOLIDAY");
+    else if (text === "holiday") {
+      try {
+        await markHoliday();
+        await sendMessage(chatId, "📅 Marked today as HOLIDAY");
+      } catch {
+        await sendMessage(chatId, "❌ Holiday not saved");
+      }
     }
 
     else if (text === "present") {
