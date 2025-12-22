@@ -42,7 +42,14 @@ async function getUpdates(offset = 0) {
 
     const chatId = update.message.chat.id;
     const text = update.message.text.toLowerCase();
-    const today = new Date().toISOString().split("T")[0];
+    function getTodayIST() {
+      return new Date().toLocaleDateString("en-CA", {
+        timeZone: "Asia/Kolkata"
+      });
+    }
+
+    const today = getTodayIST();
+
     if (text === "/test") {
       await sendMessage(
         chatId,
