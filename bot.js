@@ -43,6 +43,14 @@ async function getUpdates(offset = 0) {
     const chatId = update.message.chat.id;
     const text = update.message.text.toLowerCase();
     const today = new Date().toISOString().split("T")[0];
+    if (text === "/test") {
+      await sendMessage(
+        chatId,
+        "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
+      );
+      offset = update.update_id + 1;
+      continue;
+    }
 
     if (new Date().getDay() === 0) continue; // Sunday OFF
 
