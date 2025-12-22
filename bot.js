@@ -5,6 +5,7 @@ import Holiday from "./models/Holiday.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const API_BASE = "https://attendance-backend-hhkn.onrender.com";
 
 await connectDB();
 
@@ -14,6 +15,19 @@ async function sendMessage(chatId, text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text })
   });
+}
+
+async function saveAttendance(status, reason = "-") {
+  const res = await fetch(`${API_BASE}/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, reason })
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.message !== "Attendance saved") {
+    throw new Error("Attendance not saved");
+  }
 }
 
 async function getUpdates(offset = 0) {
@@ -30,11 +44,7 @@ async function getUpdates(offset = 0) {
     const text = update.message.text.toLowerCase();
     const today = new Date().toISOString().split("T")[0];
 
-    // Sunday OFF
-    if (new Date().getDay() === 0) {
-      offset = update.update_id + 1;
-      continue;
-    }
+    if (new Date().getDay() === 0) continue; // Sunday OFF
 
     if (text === "holiday") {
       await Holiday.updateOne(
@@ -46,26 +56,29 @@ async function getUpdates(offset = 0) {
     }
 
     else if (text === "present") {
-      await Attendance.updateOne(
-        { date: today },
-        { status: "Present", reason: "-" },
-        { upsert: true }
-      );
-      await sendMessage(chatId, "✅ Marked PRESENT");
+      try {
+        await saveAttendance("Present");
+        await sendMessage(chatId, "✅ Marked PRESENT");
+      } catch {
+        await sendMessage(chatId, "❌ PRESENT not saved");
+      }
     }
 
     else if (text.startsWith("absent")) {
       const reason = text.replace("absent", "").trim() || "No reason";
-      await Attendance.updateOne(
-        { date: today },
-        { status: "Absent", reason },
-        { upsert: true }
-      );
-      await sendMessage(chatId, `❌ Marked ABSENT\nReason: ${reason}`);
+      try {
+        await saveAttendance("Absent", reason);
+        await sendMessage(chatId, `❌ Marked ABSENT\nReason: ${reason}`);
+      } catch {
+        await sendMessage(chatId, "❌ ABSENT not saved");
+      }
     }
 
     else {
-      await sendMessage(chatId, "Use:\npresent\nabsent <reason>\nholiday");
+      await sendMessage(
+        chatId,
+        "Use:\npresent\nabsent <reason>\nholiday"
+      );
     }
 
     offset = update.update_id + 1;
