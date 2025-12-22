@@ -19,20 +19,25 @@ app.use(express.json());
 /* -------------------- DB CONNECT -------------------- */
 await connectDB();
 
+/* -------------------- HELPERS -------------------- */
+function getTodayIST() {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata"
+  });
+}
+
 /* ====================================================
-   SAVE / UPDATE ATTENDANCE (FROM BOT / FRONTEND)
+   SAVE / UPDATE ATTENDANCE
    ==================================================== */
 app.post("/attendance", async (req, res) => {
   try {
     const { status, reason = "-" } = req.body;
-
     if (!status) {
       return res.status(400).json({ message: "Status is required" });
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodayIST();
 
-    // ❌ Do not allow attendance on holidays
     const holiday = await Holiday.findOne({ date: today });
     if (holiday) {
       return res.json({ message: "Holiday — attendance ignored" });
@@ -58,24 +63,23 @@ app.post("/attendance", async (req, res) => {
 });
 
 /* ====================================================
-   GET ALL ATTENDANCE ONLY (RAW)
+   GET RAW ATTENDANCE
    ==================================================== */
 app.get("/attendance", async (req, res) => {
   try {
     const data = await Attendance.find().sort({ date: 1 });
     res.json(data);
   } catch (err) {
-    console.error("GET /attendance error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 /* ====================================================
-   GET TODAY'S STATUS (BOT / FRONTEND)
+   GET TODAY STATUS
    ==================================================== */
 app.get("/attendance/today", async (req, res) => {
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodayIST();
 
     const holiday = await Holiday.findOne({ date: today });
     if (holiday) {
@@ -90,50 +94,45 @@ app.get("/attendance/today", async (req, res) => {
     res.json(record || null);
 
   } catch (err) {
-    console.error("GET /attendance/today error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 /* ====================================================
-   🔥 MERGED DATA FOR FRONTEND (ATTENDANCE + HOLIDAYS)
+   MERGED DATA FOR FRONTEND
    ==================================================== */
 app.get("/attendance/all", async (req, res) => {
   try {
     const attendance = await Attendance.find().lean();
     const holidays = await Holiday.find().lean();
 
-    const holidayMap = new Map(
-      holidays.map(h => [h.date, h.reason || "Holiday"])
-    );
+    const map = new Map();
 
-    const merged = [];
-
-    // Add attendance records
-    for (const a of attendance) {
-      merged.push({
+    attendance.forEach(a => {
+      map.set(a.date, {
         date: a.date,
         status: a.status,
         reason: a.reason
       });
-      holidayMap.delete(a.date);
-    }
+    });
 
-    // Add holidays not in attendance
-    for (const [date, reason] of holidayMap.entries()) {
-      merged.push({
-        date,
-        status: "Holiday",
-        reason
-      });
-    }
+    holidays.forEach(h => {
+      if (!map.has(h.date)) {
+        map.set(h.date, {
+          date: h.date,
+          status: "Holiday",
+          reason: h.reason || "Holiday"
+        });
+      }
+    });
 
-    merged.sort((a, b) => a.date.localeCompare(b.date));
+    const result = [...map.values()].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
 
-    res.json(merged);
+    res.json(result);
 
   } catch (err) {
-    console.error("GET /attendance/all error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
