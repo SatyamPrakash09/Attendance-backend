@@ -32,7 +32,7 @@ Write a short summary explaining that attendance has not started,
 but holidays have been recorded. Keep it friendly and clear.
 `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     return result.response.text();
   }
@@ -69,7 +69,7 @@ Do not mention databases or technical details.
 important : Be strict on your guidelines and donot give anything other than the student attendance summary.
 `;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
 
   return result.response.text();
