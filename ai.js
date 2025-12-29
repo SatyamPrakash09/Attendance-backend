@@ -69,7 +69,7 @@ Do not mention databases or technical details.
 important : Be strict on your guidelines and donot give anything other than the student attendance summary.
 `;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const result = await model.generateContent(prompt);
 
   return result.response.text();
