@@ -81,7 +81,7 @@ Total holidays: <insert total number>
 You must cross-check every holiday date against the official 2025 Indian Public Holiday list. If a date matches an official holiday, count it as a public holiday in India. If it was a holiday provided by me that does not match the official list, count it as a user declared holiday.
 
 Breakdown of holidays:
-Public holidays in India: <insert count of public holidays>
+Public holidays in India: <insert count of public holidays and name of the public holidays>
 User-declared holidays: <insert count of holidays declared by the student>
 
 If a category has zero count, explicitly mention it as 0.
