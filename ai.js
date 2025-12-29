@@ -57,12 +57,37 @@ Attendance records:
 ${attendanceDetails}
 Holidays:
 ${holidayDetails}
-Write a summary in that the total present days must be present and number of absent days must be there and if there are holidays, check that if it was a public holiday or a holiday declared by user and also show that in formal way and in most readable way.
-format :
-no of present days:
-no of absent days:
-no of holidays: in this create two part no of holidays that were public holidays in india 
-important : Be strict on your guidelines and donot give anything other than the student attendance summary.`;
+
+You are generating a formal student attendance summary.
+
+Follow these rules strictly:
+- Do not use quotation marks.
+- Do not use markdown symbols such as **, *, or bullet icons.
+- Do not add greetings, explanations, or conclusions.
+- Do not mention databases, systems, AI, or internal logic.
+- Output ONLY the attendance summary in plain text.
+
+Include all of the following details clearly and accurately:
+
+Number of present days:
+<insert total present days>
+
+Number of absent days:
+<insert total absent days>
+
+Number of holidays:
+Total holidays: <insert total number>
+
+You must cross-check every holiday date against the official 2025 Indian Public Holiday list. If a date matches an official holiday, count it as a public holiday in India. If it was a holiday provided by me that does not match the official list, count it as a user declared holiday.
+
+Breakdown of holidays:
+Public holidays in India: <insert count of public holidays>
+User-declared holidays: <insert count of holidays declared by the student>
+
+If a category has zero count, explicitly mention it as 0.
+Use clear, formal, and professional language.
+Ensure the summary is easy to read and well structured.
+`;
 
     const result = await model.generateContent(prompt);
     
