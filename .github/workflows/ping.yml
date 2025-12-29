@@ -9,6 +9,6 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping backend
+      - name: ping
         run: |
           curl -fsS https://attendance-backend-hhkn.onrender.com/health || exit 0
