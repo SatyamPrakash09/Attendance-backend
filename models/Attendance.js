@@ -4,7 +4,7 @@ const attendanceSchema = new mongoose.Schema(
   {
     date: { type: String, unique: true }, // YYYY-MM-DD
     status: { type: String, enum: ["Present", "Absent"], required: true },
-    reason: { type: String, default: "-" }
+    reason: { type: String, default: "Present" }
   },
   { timestamps: true }
 );

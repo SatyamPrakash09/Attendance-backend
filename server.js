@@ -177,6 +177,22 @@ app.get("/attendance/summarize", async (req, res) => {
 });
 
 
+app.get("/__test/ai", async (req, res) => {
+  try {
+    const summary = await summarizeAttendance();
+    res.json({
+      status: "AI working",
+      summary
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: "AI failed",
+      error: err.message
+    });
+  }
+});
+
+
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
