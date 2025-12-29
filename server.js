@@ -162,7 +162,7 @@ app.get("/status", (req, res) => {
   });
 });
 
-app.get(".attendance/summarize",async (req, res) => {
+app.get("attendance/summarize",async (req, res) => {
   try{
     const summary = await summarizeAttendance()
     res.json*({summary})
