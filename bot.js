@@ -73,7 +73,7 @@ async function getUpdates(offset = 0) {
       continue;
     }
 
-    if (text === "/test") {
+    if (text === "test") {
       await sendMessage(
         chatId,
         "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
