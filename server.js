@@ -6,6 +6,7 @@ import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 import { summarizeAttendance } from "./ai.js";
+// import { sendSummaryMail } from "./mailer.js"; // if you enabled email
 
 const app = express();
 
@@ -162,15 +163,21 @@ app.get("/status", (req, res) => {
   });
 });
 
-app.get("attendance/summarize",async (req, res) => {
-  try{
-    const summary = await summarizeAttendance()
-    res.json*({summary})
-  } catch(err){
-    console.error("AI summary error: ", err)
-    res.status(500).json({message: "AI summary failed"})
+app.get("/attendance/summarize", async (req, res) => {
+  try {
+    const summary = await summarizeAttendance();
+
+    // // optional email
+    // if (sendSummaryMail) {
+    //   await sendSummaryMail(summary);
+    // }
+
+    res.json({ summary });
+  } catch (err) {
+    console.error("Summarize error:", err);
+    res.status(500).json({ message: "Failed to generate summary" });
   }
-})
+});
 
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
