@@ -58,6 +58,10 @@ ${attendanceDetails}
 Holidays:
 ${holidayDetails}
 Write a summary in that the total present days must be present and number of absent days must be there and if there are holidays, check that if it was a public holiday or a holiday declared by user and also show that in formal way and in most readable way.
+format :
+no of present days:
+no of absent days:
+no of holidays: in this create two part no of holidays that were public holidays in india 
 important : Be strict on your guidelines and donot give anything other than the student attendance summary.`;
 
     const result = await model.generateContent(prompt);
