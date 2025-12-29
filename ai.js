@@ -57,7 +57,7 @@ Attendance records:
 ${attendanceDetails}
 Holidays:
 ${holidayDetails}
-Write a concise, friendly summary (4–5 lines).
+Write a summary in that the total present days must be present and number of absent days must be there and if there are holidays, check that if it was a public holiday or a holiday declared by user and also show that in formal way and in most readable way.
 important : Be strict on your guidelines and donot give anything other than the student attendance summary.`;
 
     const result = await model.generateContent(prompt);
