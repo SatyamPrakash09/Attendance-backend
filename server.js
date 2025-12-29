@@ -5,6 +5,7 @@ import "dotenv/config";
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
+import { summarizeAttendance } from "./ai.js";
 
 const app = express();
 
@@ -160,6 +161,16 @@ app.get("/status", (req, res) => {
     time: new Date().toISOString()
   });
 });
+
+app.get(".attendance/summarize",async (req, res) => {
+  try{
+    const summary = await summarizeAttendance()
+    res.json*({summary})
+  } catch(err){
+    console.error("AI summary error: ", err)
+    res.status(500).json({message: "AI summary failed"})
+  }
+})
 
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
