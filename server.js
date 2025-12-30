@@ -1,6 +1,6 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import "dotenv/config";
 
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
@@ -42,7 +42,7 @@ app.get("/health", (req, res) => {
    ==================================================== */
 app.post("/attendance", async (req, res) => {
   try {
-    const { status, reason = "-" } = req.body;
+    const { status, reason = "present" } = req.body;
     if (!status) {
       return res.status(400).json({ message: "Status is required" });
     }
