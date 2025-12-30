@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { connectDB } from "./db.js";
+import {summarizeAttendance} from "./ai.js"
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -73,14 +74,14 @@ async function getUpdates(offset = 0) {
       continue;
     }
 
-    if (text === "test") {
+    if (text.toLowerCase() === "test") {
       await sendMessage(
         chatId,
         "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
       );
     }
 
-    else if (text === "holiday") {
+    else if (text.toLowerCase() === "holiday") {
       try {
         await markHoliday();
         await sendMessage(chatId, "📅 Marked today as HOLIDAY");
@@ -89,7 +90,7 @@ async function getUpdates(offset = 0) {
       }
     }
 
-    else if (text === "present") {
+    else if (text.toLowerCase() === "present" || text === "Present") {
       try {
         await saveAttendance("Present");
         await sendMessage(chatId, "✅ Marked PRESENT");
@@ -98,7 +99,15 @@ async function getUpdates(offset = 0) {
       }
     }
 
-    else if (text.startsWith("absent")) {
+    else if(text === "/summary" || text.toLowerCase() ==="summary"){
+      try{
+        const response = await summarizeAttendance()
+        await sendMessage(chatId, response)
+      }catch{
+        await sendMessage(chatId, "AI summary not generated ❌")
+      }
+    }
+    else if (text.toLowerCase().startsWith("absent")) {
       const reason = text.replace("absent", "").trim() || "No reason";
       try {
         await saveAttendance("Absent", reason);
@@ -111,7 +120,7 @@ async function getUpdates(offset = 0) {
     else {
       await sendMessage(
         chatId,
-        "Use:\npresent\nabsent <reason>\nholiday"
+        "Use:\n1. Present\n\n2. Absent <reason>\n\n3. holiday"
       );
     }
 
