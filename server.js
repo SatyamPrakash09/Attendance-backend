@@ -176,18 +176,28 @@ app.get("/status", (req, res) => {
 
 app.post("/attendance/summarize", async (req, res) => {
   try {
+    // 1️⃣ Generate summary
     const summary = await summarizeAttendance();
 
-    await sendSummaryEmail(summary);
-
+    // 2️⃣ Send response to frontend immediately
     res.json({
       summary,
-      emailed: true
+      emailed: false
     });
+
+    // 3️⃣ Send email in background (DO NOT await)
+    sendSummaryEmail(summary)
+      .then(() => {
+        console.log("📧 Summary email sent successfully");
+      })
+      .catch(err => {
+        console.error("📧 Email failed:", err.message);
+      });
+
   } catch (err) {
     console.error("Summary error:", err.message);
     res.status(500).json({
-      message: "Failed to generate or email summary"
+      message: "Failed to generate summary"
     });
   }
 });
