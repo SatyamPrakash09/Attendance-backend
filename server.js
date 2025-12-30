@@ -5,7 +5,9 @@ import cors from "cors";
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
+import { sendSummaryEmail } from "./mailer.js";
 import { summarizeAttendance } from "./ai.js";
+
 // import { sendSummaryMail } from "./mailer.js"; // if you enabled email
 
 const app = express();
@@ -172,15 +174,20 @@ app.get("/status", (req, res) => {
   });
 });
 
-app.get("/attendance/summarize", async (req, res) => {
+app.post("/attendance/summarize", async (req, res) => {
   try {
     const summary = await summarizeAttendance();
-    res.json({ summary });
+
+    await sendSummaryEmail(summary);
+
+    res.json({
+      summary,
+      emailed: true
+    });
   } catch (err) {
-    console.error("AI summary error:", err);  // this will show full error in logs
+    console.error("Summary error:", err.message);
     res.status(500).json({
-      message: "Failed to generate summary",
-      error: err.message  // send real error message temporarily
+      message: "Failed to generate or email summary"
     });
   }
 });

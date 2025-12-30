@@ -90,7 +90,6 @@ Ensure the summary is easy to read and well structured.
 `;
 
     const result = await model.generateContent(prompt);
-    await mail()
     return result.response.text();
   } catch (error) {
     console.error("Gemini Error:", error.message);
