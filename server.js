@@ -186,13 +186,13 @@ app.post("/attendance/summarize", async (req, res) => {
     });
 
     // 3️⃣ Send email in background (DO NOT await)
-    sendSummaryEmail(summary)
-      .then(() => {
-        console.log("📧 Summary email sent successfully");
-      })
-      .catch(err => {
-        console.error("📧 Email failed:", err.message);
-      });
+    // sendSummaryEmail(summary)
+    //   .then(() => {
+    //     console.log("📧 Summary email sent successfully");
+    //   })
+    //   .catch(err => {
+    //     console.error("📧 Email failed:", err.message);
+    //   });
 
   } catch (err) {
     console.error("Summary error:", err.message);
