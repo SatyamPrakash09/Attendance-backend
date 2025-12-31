@@ -219,6 +219,13 @@ app.get("/__test/ai", async (req, res) => {
 });
 
 
+
+
+app.get("/cron/run", async (req, res) => {
+  console.log("⏰ External cron ping");
+  res.json({ ok: true, time: new Date().toISOString() });
+});
+
 /* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
