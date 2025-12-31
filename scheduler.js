@@ -5,112 +5,88 @@ import mongoose from "mongoose";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 
-// ------------------ TELEGRAM CONFIG ------------------
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const CHAT_ID = process.env.CHAT_ID;
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+/* ------------------ START LOG ------------------ */
+console.log("🔥 Scheduler file loaded");
 
-// ------------------ MONGODB CONNECT ------------------
+/* ------------------ MONGODB CONNECT ------------------ */
 if (mongoose.connection.readyState === 0) {
   await mongoose.connect(process.env.MONGO_URI);
   console.log("✅ Scheduler connected to MongoDB");
 }
 
-// ------------------ HELPERS ------------------
+/* ------------------ TELEGRAM CONFIG ------------------ */
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const CHAT_ID = process.env.CHAT_ID;
+const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+/* ------------------ HELPERS ------------------ */
+function getTodayIST() {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata"
+  });
+}
+
+function getDayIST() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  ).getDay();
+}
+
 async function sendMessage(text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: CHAT_ID,
-      text
-    })
+    body: JSON.stringify({ chat_id: CHAT_ID, text })
   });
 }
 
-function getToday() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function isSunday() {
-  return new Date().getDay() === 0;
-}
-
-// =====================================================
-// ⏰ 1️⃣ ATTENDANCE PROMPT (9:00 AM IST)
-// Render runs in UTC → 9:00 AM IST = 3:30 AM UTC
-// =====================================================
-cron.schedule("30 3 * * 1-6", async () => {
-  console.log("⏰ Scheduler: Morning prompt check");
-
-  if (isSunday()) {
-    console.log("Sunday — skipped");
-    return;
-  }
-
-  const today = getToday();
-
-  // Skip if holiday
-  const holiday = await Holiday.findOne({ date: today });
-  if (holiday) {
-    console.log("Holiday — skipped");
-    return;
-  }
-
-  // Skip if already marked
-  const alreadyMarked = await Attendance.findOne({ date: today });
-  if (alreadyMarked) {
-    console.log("Attendance already marked — skipped");
-    return;
-  }
-
-  await sendMessage(
-    "📘 Attendance Time (9:00 AM IST)\n\nReply with:\n• present\n• absent <reason>\n• holiday"
-  );
-
-  console.log("📩 Attendance prompt sent");
+/* ------------------ TEST CRON (every minute) ------------------ */
+cron.schedule("* * * * *", () => {
+  console.log("🧪 Cron heartbeat:", new Date().toISOString());
 });
 
-// =====================================================
-// ⏰ 2️⃣ AUTO-ABSENT (11:00 AM IST)
-// 11:00 AM IST = 5:30 AM UTC
-// =====================================================
+/* =====================================================
+   ⏰ MORNING PROMPT — 9:00 AM IST (03:30 UTC)
+   ===================================================== */
+cron.schedule("30 3 * * 1-6", async () => {
+  console.log("⏰ Morning attendance check");
+
+  if (getDayIST() === 0) return;
+
+  const today = getTodayIST();
+
+  if (await Holiday.findOne({ date: today })) return;
+  if (await Attendance.findOne({ date: today })) return;
+
+  await sendMessage(
+    "📘 Attendance Time\n\npresent | absent <reason> | holiday"
+  );
+
+  console.log("📩 Prompt sent");
+});
+
+/* =====================================================
+   ⏰ AUTO ABSENT — 11:00 AM IST (05:30 UTC)
+   ===================================================== */
 cron.schedule("30 5 * * 1-6", async () => {
-  console.log("⏰ Scheduler: Auto-absent check");
+  console.log("⏰ Auto-absent check");
 
-  if (isSunday()) {
-    console.log("Sunday — skipped");
-    return;
-  }
+  if (getDayIST() === 0) return;
 
-  const today = getToday();
+  const today = getTodayIST();
 
-  // Skip if holiday
-  const holiday = await Holiday.findOne({ date: today });
-  if (holiday) {
-    console.log("Holiday — skipped");
-    return;
-  }
+  if (await Holiday.findOne({ date: today })) return;
+  if (await Attendance.findOne({ date: today })) return;
 
-  // Skip if already marked
-  const alreadyMarked = await Attendance.findOne({ date: today });
-  if (alreadyMarked) {
-    console.log("Attendance already marked — skipped");
-    return;
-  }
-
-  // Auto-mark absent
   await Attendance.create({
     date: today,
     status: "Absent",
-    reason: "Auto-marked (No response by 11:00 AM)"
+    reason: "Auto-marked (No response by 11:00 AM IST)"
   });
 
-  await sendMessage(
-    "⚠️ Marked ABSENT\nReason: No response by 11:00 AM IST"
-  );
+  await sendMessage("⚠️ Marked ABSENT (no response)");
 
   console.log("❌ Auto-absent recorded");
 });
 
-console.log("✅ Scheduler started and running");
+console.log("✅ Scheduler initialized");
