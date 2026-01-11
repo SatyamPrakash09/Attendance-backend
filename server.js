@@ -5,7 +5,7 @@ import cors from "cors";
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
-import { sendSummaryEmail } from "./mailer.js";
+// import { sendSummaryEmail } from "./mailer.js";
 import { summarizeAttendance } from "./ai.js";
 
 // import { sendSummaryMail } from "./mailer.js"; // if you enabled email

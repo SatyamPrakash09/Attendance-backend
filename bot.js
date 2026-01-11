@@ -1,3 +1,4 @@
+import fetch from "node-fetch";
 import "dotenv/config";
 import { connectDB } from "./db.js";
 import {summarizeAttendance} from "./ai.js"
