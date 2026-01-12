@@ -6,7 +6,7 @@ import {summarizeAttendance} from "./ai.js"
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const API_BASE = "https://attendance-backend-hhkn.onrender.com";
-
+// const API_BASE = "localhost:5000";
 await connectDB();
 
 /* -------------------- HELPERS -------------------- */
