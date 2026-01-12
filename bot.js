@@ -75,7 +75,7 @@ async function getUpdates(offset = 0) {
       continue;
     }
 
-    if (text.toLowerCase() === "test") {
+    if (text.toLowerCase() === "test" || text.toLowerCase()==="/start") {
       await sendMessage(
         chatId,
         "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
@@ -89,6 +89,11 @@ async function getUpdates(offset = 0) {
       } catch {
         await sendMessage(chatId, "❌ Holiday not saved");
       }
+    }
+    else if(text.toLowerCase().includes()==="hello"){
+      await sendMessage(
+        `Hello, Satyam,Your System are woking fine\nUse:\n1. Present✅ \n2. Absent❌ <reason> \n3. Holiday✈️`)
+
     }
 
     else if (text.toLowerCase() === "present" || text === "Present") {
