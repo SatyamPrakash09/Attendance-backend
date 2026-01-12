@@ -31,7 +31,7 @@ async function sendMessage(chatId, text) {
 }
 
 /* -------------------- API CALLS -------------------- */
-async function saveAttendance(status, reason = "-") {
+async function saveAttendance(status, reason = "Present") {
   const res = await fetch(`${API_BASE}/attendance`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
