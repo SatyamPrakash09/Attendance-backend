@@ -31,7 +31,7 @@ async function sendMessage(chatId, text) {
 }
 
 /* -------------------- API CALLS -------------------- */
-async function saveAttendance(status, reason = "Present") {
+async function saveAttendance(status, reason = "-") {
   const res = await fetch(`${API_BASE}/attendance`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -75,7 +75,7 @@ async function getUpdates(offset = 0) {
       continue;
     }
 
-    if (text.toLowerCase() === "test" || text.toLowerCase()==="/start") {
+    if (text.toLowerCase() === "test"){
       await sendMessage(
         chatId,
         "✅ Bot is working\n🌐 Backend: OK\n🗄️ MongoDB: Connected"
