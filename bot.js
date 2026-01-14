@@ -59,6 +59,7 @@ async function poll() {
         reply =
           "👋 Welcome to Attendance Tracker\n\n" +
           "Commands:\n" +
+          `https://attendance-09.vercel.app/?uid=${chatId}\n\n`+
           "• present\n" +
           "• absent <reason>\n" +
           "• holiday\n" +
