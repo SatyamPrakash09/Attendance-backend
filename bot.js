@@ -136,4 +136,4 @@ async function getUpdates(offset = 0) {
   setTimeout(() => getUpdates(offset), 2000);
 }
 
-getUpdates();
+export default getUpdates();

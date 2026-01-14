@@ -6,6 +6,7 @@ import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 // import { sendSummaryEmail } from "./mailer.js";
+import getUpdates from "./bot.js"
 import { summarizeAttendance } from "./ai.js";
 
 // import { sendSummaryMail } from "./mailer.js"; // if you enabled email
@@ -57,12 +58,14 @@ app.post("/attendance", async (req, res) => {
     }
 
     await Attendance.findOneAndUpdate(
+      {chat_id: getUpdates.chat_id},
       { date: today },
       { status, reason },
       { upsert: true, new: true }
     );
 
     res.json({
+      chat_id: getUpdates.chat_id,
       message: "Attendance saved",
       date: today,
       status,
@@ -97,6 +100,7 @@ app.get("/attendance/today", async (req, res) => {
     const holiday = await Holiday.findOne({ date: today });
     if (holiday) {
       return res.json({
+        chat_id: getUpdates.chat_id,
         date: today,
         status: "Holiday",
         reason: holiday.reason || "Holiday"
@@ -154,12 +158,13 @@ app.post("/holiday", async (req, res) => {
   const today = getTodayIST();
 
   await Holiday.findOneAndUpdate(
+    {chat_id: getUpdates.chat_id},
     { date: today },
     { reason: "Declared by user" },
     { upsert: true }
   );
 
-  res.json({ message: "Holiday saved", date: today });
+  res.json({chat_id: getUpdates.chat_id, message: "Holiday saved", date: today });
 });
 
 
