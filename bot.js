@@ -38,6 +38,17 @@ async function sendMessage(chatId, text) {
     body: JSON.stringify({ chat_id: chatId, text })
   });
 }
+async function markHoliday(chatId) {
+  const res = await fetch(`${API_BASE}/holiday?userId=${chatId}`, {
+    method: "POST"
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Holiday not saved");
+  }
+}
+
 
 /* -------------------- POLLING -------------------- */
 async function poll() {
@@ -107,10 +118,10 @@ async function poll() {
 
       else if (text === "holiday") {
         try {
-          await apiPost("/holiday", chatId);
-          reply = "📅 Holiday marked";
+          await markHoliday(chatId);
+          await sendMessage(chatId, "📅 Marked today as HOLIDAY");
         } catch {
-          reply = "❌ Failed to mark holiday";
+          await sendMessage(chatId, "❌ Holiday not saved");
         }
       }
 
