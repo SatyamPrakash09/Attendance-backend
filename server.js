@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-
+import crypto from "crypto"
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
@@ -20,6 +20,32 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 app.use(express.json());
+
+// -------------------Telegram Login-----------------------------
+function auth(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  const userId = req.headers["x-user-id"];
+
+  if (!token || !userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const validToken = crypto
+    .createHash("sha256")
+    .update(userId + process.env.JWT_SECRET)
+    .digest("hex");
+
+  if (token !== validToken) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+
+  req.userId = userId;
+  next();
+}
+
+
+
+// ---------------------------------------------------------------
 
 /* -------------------- DB CONNECT -------------------- */
 await connectDB();
@@ -40,9 +66,12 @@ app.get("/health", (req, res) => {
 });
 
 
+
+
+const userId = chatId.toString();
 /* ====================================================
-   SAVE / UPDATE ATTENDANCE
-   ==================================================== */
+SAVE / UPDATE ATTENDANCE
+==================================================== */
 app.post("/attendance", async (req, res) => {
   try {
     const { status, reason = "present" } = req.body;
@@ -58,8 +87,7 @@ app.post("/attendance", async (req, res) => {
     }
 
     await Attendance.findOneAndUpdate(
-      {chat_id: getUpdates.chat_id},
-      { date: today },
+      {userId, date: today },
       { status, reason },
       { upsert: true, new: true }
     );
@@ -118,11 +146,16 @@ app.get("/attendance/today", async (req, res) => {
 /* ====================================================
    MERGED DATA FOR FRONTEND
    ==================================================== */
-app.get("/attendance/all", async (req, res) => {
+app.get("/attendance/all",auth, async (req, res) => {
   try {
     const attendance = await Attendance.find().lean();
     const holidays = await Holiday.find().lean();
-
+    const data = await Attendance.find({ userId: req.userId });
+    res.json(data);
+    const {userId} = req.query
+    if(!userId){
+      return res.status(400).json({message:"userId required"})
+    }
     const map = new Map();
 
     attendance.forEach(a => {
@@ -158,13 +191,12 @@ app.post("/holiday", async (req, res) => {
   const today = getTodayIST();
 
   await Holiday.findOneAndUpdate(
-    {chat_id: getUpdates.chat_id},
-    { date: today },
+    {userId, date: today },
     { reason: "Declared by user" },
     { upsert: true }
   );
 
-  res.json({chat_id: getUpdates.chat_id, message: "Holiday saved", date: today });
+  res.json({message: "Holiday saved", date: today });
 });
 
 
