@@ -74,8 +74,11 @@ app.post("/attendance", async (req, res) => {
 /* MARK HOLIDAY */
 app.post("/holiday", async (req, res) => {
   try {
+    // This line is key: it checks the URL query AND the headers
     const userId = req.query.userId || req.headers["x-user-id"];
+
     if (!userId) {
+      console.log("❌ Debug: No UserId found in query or headers");
       return res.status(400).json({ message: "UserId missing" });
     }
 
@@ -87,11 +90,7 @@ app.post("/holiday", async (req, res) => {
       { upsert: true, new: true }
     );
 
-    res.json({
-      message: "Holiday saved",
-      userId,
-      date: today
-    });
+    res.json({ message: "Holiday saved", userId, date: today });
   } catch (err) {
     console.error("POST /holiday error:", err);
     res.status(500).json({ message: "Server error" });

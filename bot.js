@@ -54,13 +54,21 @@ async function markHoliday(chatId) {
     throw new Error("chatId missing in bot");
   }
 
-  const url = `${API_BASE}/holiday?chatId=${encodeURIComponent(String(chatId))}`;
+  const url = `${API_BASE}/holiday?userId=${chatId}`;
 
-  const res = await fetch(url, { method: "POST" });
+  const res = await fetch(url, { 
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({}) // Sending an empty body helps avoid some server errors
+  });
+
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.message || "Holiday not saved");
+    // This will now catch the "UserId missing" message from the server
+    throw new Error(data.message || "Holiday not saved"); 
   }
 
   return data;
