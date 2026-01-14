@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
+import LoginToken from "./models/LoginToken.js";
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
@@ -174,6 +175,37 @@ app.post("/auth/telegram", (req, res) => {
   res.json({
     userId,
     token
+  });
+});
+// ---------------------------------------------
+
+
+app.post("/auth/telegram-link", async (req, res) => {
+  const { token } = req.body;
+
+  const record = await LoginToken.findOne({ token });
+
+  if (!record) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+
+  if (record.expiresAt < new Date()) {
+    await record.deleteOne();
+    return res.status(401).json({ message: "Token expired" });
+  }
+
+  const userId = record.userId;
+
+  const authToken = crypto
+    .createHash("sha256")
+    .update(userId + process.env.JWT_SECRET)
+    .digest("hex");
+
+  await record.deleteOne(); // one-time use
+
+  res.json({
+    userId,
+    token: authToken
   });
 });
 

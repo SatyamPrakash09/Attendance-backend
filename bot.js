@@ -1,5 +1,7 @@
 import fetch from "node-fetch";
 import "dotenv/config";
+import LoginToken from "./models/LoginToken.js";
+import { generateLoginToken } from "./utils/token.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -65,7 +67,24 @@ async function getUpdates(offset = 0) {
 
     const chatId = update.message.chat.id.toString();
     const text = update.message.text.toLowerCase();
+    if (text.startsWith("/start")) {
+      const param = text.split(" ")[1];
 
+      if (param === "login") {
+        const token = generateLoginToken(chatId);
+
+        await LoginToken.create({
+          userId: chatId.toString(),
+          token,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min
+        });
+
+        await sendMessage(
+          chatId,
+          `🔐 Login to Attendance Tracker\n\n👉 https://attendance-09.vercel.app/login?token=${token}\n\nThis link expires in 5 minutes.`
+        );
+      }
+    }
     // Sunday OFF
     if (getDayIST() === 0) {
       await sendMessage(chatId, "📅 Sunday is a holiday");
