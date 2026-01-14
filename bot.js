@@ -39,12 +39,20 @@ async function sendMessage(chatId, text) {
   });
 }
 async function markHoliday(chatId) {
-  try {
-    await apiPost("/holiday", chatId);
-  } catch (err) {
-    throw new Error(err.message || "Holiday not saved");
+  const res = await fetch(
+    `${API_BASE}/holiday?userId=${chatId}`,
+    { method: "POST" }
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.message || "Holiday not saved");
   }
+
+  return data;
 }
+
 
 
 /* -------------------- POLLING -------------------- */
@@ -63,7 +71,12 @@ async function poll() {
       const chatId = update.message.chat.id.toString();
       const text = update.message.text.toLowerCase();
 
-      let reply = "I didn't understand that.";
+      let reply = `Incorrect Command !!!!!!!!!
+                    Send Only:
+                    • present
+                    • absent <reason>
+                    • holiday
+                    • summary`;
 
       if (text === "/start") {
         const firstName = update.message.from.first_name || "";
@@ -91,7 +104,7 @@ async function poll() {
       }
 
 
-      else if (text === "present") {
+      if (text === "present") {
         try {
           await apiPost("/attendance", chatId, { status: "Present" });
           reply = "✅ Present marked";
@@ -112,15 +125,16 @@ async function poll() {
           reply = "❌ Failed to mark absent";
         }
       }
-
       else if (text === "holiday") {
         try {
           await markHoliday(chatId);
           await sendMessage(chatId, "📅 Marked today as HOLIDAY");
-        } catch {
+        } catch (err) {
+          console.error("Holiday error:", err.message);
           await sendMessage(chatId, "❌ Holiday not saved");
         }
       }
+
 
       else if (text === "summary") {
         reply =
