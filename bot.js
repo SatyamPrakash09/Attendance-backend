@@ -1,5 +1,7 @@
 import "dotenv/config";
+import { connectDB } from "./db.js";
 import User from "./models/User.js";
+await connectDB();
 
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -39,11 +41,13 @@ async function sendMessage(chatId, text) {
   });
 }
 async function markHoliday(chatId) {
-  const res = await fetch(
-    `${API_BASE}/holiday?userId=${chatId}`,
-    { method: "POST" }
-  );
+  if (!chatId) {
+    throw new Error("chatId missing in bot");
+  }
 
+  const url = `${API_BASE}/holiday?userId=${encodeURIComponent(String(chatId))}`;
+
+  const res = await fetch(url, { method: "POST" });
   const data = await res.json();
 
   if (!res.ok) {
@@ -52,6 +56,7 @@ async function markHoliday(chatId) {
 
   return data;
 }
+
 
 
 
@@ -133,7 +138,10 @@ async function poll() {
           console.error("Holiday error:", err.message);
           await sendMessage(chatId, "❌ Holiday not saved");
         }
+        continue; // ⬅️ IMPORTANT
       }
+
+
 
 
       else if (text === "summary") {

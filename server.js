@@ -203,6 +203,31 @@ app.post("/auth/telegram", (req, res) => {
 
 // --------------------------------------------------------------------
 
+app.post("/holiday", async (req, res) => {
+  try {
+    const userId = req.query.userId || req.headers["x-user-id"];
+
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
+
+    const today = getTodayIST();
+
+    await Holiday.findOneAndUpdate(
+      { userId, date: today },
+      { reason: "Declared by user" },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: "Holiday saved", date: today });
+  } catch (err) {
+    console.error("POST /holiday error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// -------------------------------------------
 
 app.get("/user", async (req, res) => {
   const userId = req.query.userId;
