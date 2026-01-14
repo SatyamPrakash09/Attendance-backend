@@ -1,27 +1,20 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import crypto from "crypto"
+import crypto from "crypto";
+
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
-// import { sendSummaryEmail } from "./mailer.js";
-import getUpdates from "./bot.js"
 import { summarizeAttendance } from "./ai.js";
-
-// import { sendSummaryMail } from "./mailer.js"; // if you enabled email
 
 const app = express();
 
 /* -------------------- MIDDLEWARE -------------------- */
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
+app.use(cors());
 app.use(express.json());
 
-// -------------------Telegram Login-----------------------------
+/* -------------------- AUTH -------------------- */
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   const userId = req.headers["x-user-id"];
@@ -43,11 +36,7 @@ function auth(req, res, next) {
   next();
 }
 
-
-
-// ---------------------------------------------------------------
-
-/* -------------------- DB CONNECT -------------------- */
+/* -------------------- DB -------------------- */
 await connectDB();
 
 /* -------------------- HELPERS -------------------- */
@@ -57,105 +46,56 @@ function getTodayIST() {
   });
 }
 
+/* -------------------- ROUTES -------------------- */
 
-/* ====================================================
-   BACKEND HEALTH
-   ==================================================== */
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
-});
+app.get("/health", (_, res) => res.send("OK"));
 
-
-
-
-const userId = chatId.toString();
-/* ====================================================
-SAVE / UPDATE ATTENDANCE
-==================================================== */
-app.post("/attendance", async (req, res) => {
+/* SAVE / UPDATE ATTENDANCE */
+app.post("/attendance", auth, async (req, res) => {
   try {
-    const { status, reason = "present" } = req.body;
-    if (!status) {
-      return res.status(400).json({ message: "Status is required" });
-    }
-
+    const { status, reason = "-" } = req.body;
     const today = getTodayIST();
 
-    const holiday = await Holiday.findOne({ date: today });
+    const holiday = await Holiday.findOne({
+      userId: req.userId,
+      date: today
+    });
+
     if (holiday) {
       return res.json({ message: "Holiday — attendance ignored" });
     }
 
     await Attendance.findOneAndUpdate(
-      {userId, date: today },
+      { userId: req.userId, date: today },
       { status, reason },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
-    res.json({
-      chat_id: getUpdates.chat_id,
-      message: "Attendance saved",
-      date: today,
-      status,
-      reason
-    });
-
-  } catch (err) {
-    console.error("POST /attendance error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-/* ====================================================
-   GET RAW ATTENDANCE
-   ==================================================== */
-app.get("/attendance", async (req, res) => {
-  try {
-    const data = await Attendance.find().sort({ date: 1 });
-    res.json(data);
+    res.json({ message: "Attendance saved", date: today });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* ====================================================
-   GET TODAY STATUS
-   ==================================================== */
-app.get("/attendance/today", async (req, res) => {
-  try {
-    const today = getTodayIST();
+/* MARK HOLIDAY */
+app.post("/holiday", auth, async (req, res) => {
+  const today = getTodayIST();
 
-    const holiday = await Holiday.findOne({ date: today });
-    if (holiday) {
-      return res.json({
-        chat_id: getUpdates.chat_id,
-        date: today,
-        status: "Holiday",
-        reason: holiday.reason || "Holiday"
-      });
-    }
+  await Holiday.findOneAndUpdate(
+    { userId: req.userId, date: today },
+    { reason: "Declared by user" },
+    { upsert: true }
+  );
 
-    const record = await Attendance.findOne({ date: today });
-    res.json(record || null);
-
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
+  res.json({ message: "Holiday saved", date: today });
 });
 
-/* ====================================================
-   MERGED DATA FOR FRONTEND
-   ==================================================== */
-app.get("/attendance/all",auth, async (req, res) => {
+/* GET ALL ATTENDANCE (MERGED) */
+app.get("/attendance/all", auth, async (req, res) => {
   try {
-    const attendance = await Attendance.find().lean();
-    const holidays = await Holiday.find().lean();
-    const data = await Attendance.find({ userId: req.userId });
-    res.json(data);
-    const {userId} = req.query
-    if(!userId){
-      return res.status(400).json({message:"userId required"})
-    }
+    const attendance = await Attendance.find({ userId: req.userId }).lean();
+    const holidays = await Holiday.find({ userId: req.userId }).lean();
+
     const map = new Map();
 
     attendance.forEach(a => {
@@ -181,89 +121,22 @@ app.get("/attendance/all",auth, async (req, res) => {
     );
 
     res.json(result);
-
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-app.post("/holiday", async (req, res) => {
-  const today = getTodayIST();
-
-  await Holiday.findOneAndUpdate(
-    {userId, date: today },
-    { reason: "Declared by user" },
-    { upsert: true }
-  );
-
-  res.json({message: "Holiday saved", date: today });
-});
-
-
-/* ====================================================
-   HEALTH CHECK
-   ==================================================== */
-app.get("/status", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: process.uptime(),
-    time: new Date().toISOString()
-  });
-});
-
-app.post("/attendance/summarize", async (req, res) => {
+/* AI SUMMARY */
+app.post("/attendance/summarize", auth, async (req, res) => {
   try {
-    // 1️⃣ Generate summary
-    const summary = await summarizeAttendance();
-
-    // 2️⃣ Send response to frontend immediately
-    res.json({
-      summary,
-      emailed: false
-    });
-
-    // 3️⃣ Send email in background (DO NOT await)
-    // sendSummaryEmail(summary)
-    //   .then(() => {
-    //     console.log("📧 Summary email sent successfully");
-    //   })
-    //   .catch(err => {
-    //     console.error("📧 Email failed:", err.message);
-    //   });
-
-  } catch (err) {
-    console.error("Summary error:", err.message);
-    res.status(500).json({
-      message: "Failed to generate summary"
-    });
+    const summary = await summarizeAttendance(req.userId);
+    res.json({ summary });
+  } catch {
+    res.status(500).json({ message: "AI failed" });
   }
 });
 
-
-app.get("/__test/ai", async (req, res) => {
-  try {
-    const summary = await summarizeAttendance();
-    res.json({
-      status: "AI working",
-      summary
-    });
-  } catch (err) {
-    res.status(500).json({
-      status: "AI failed",
-      error: err.message
-    });
-  }
-});
-
-
-
-
-app.get("/cron/run", async (req, res) => {
-  console.log("⏰ External cron ping");
-  res.json({ ok: true, time: new Date().toISOString() });
-});
-
-/* -------------------- START SERVER -------------------- */
+/* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
