@@ -2,10 +2,11 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import LoginToken from "./models/LoginToken.js";
+
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
+import LoginToken from "./models/LoginToken.js";
 import { summarizeAttendance } from "./ai.js";
 
 const app = express();
@@ -14,7 +15,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* -------------------- AUTH -------------------- */
+/* -------------------- AUTH (FRONTEND ONLY) -------------------- */
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   const userId = req.headers["x-user-id"];
@@ -46,55 +47,75 @@ function getTodayIST() {
   });
 }
 
-/* -------------------- ROUTES -------------------- */
-
+/* -------------------- HEALTH -------------------- */
 app.get("/health", (_, res) => res.send("OK"));
 
+/* ====================================================
+   BOT ROUTES (NO AUTH)
+   ==================================================== */
+
 /* SAVE / UPDATE ATTENDANCE */
-app.post("/attendance", auth, async (req, res) => {
+app.post("/attendance", async (req, res) => {
   try {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
+
     const { status, reason = "-" } = req.body;
     const today = getTodayIST();
 
-    const holiday = await Holiday.findOne({
-      userId: req.userId,
-      date: today
-    });
-
+    const holiday = await Holiday.findOne({ userId, date: today });
     if (holiday) {
       return res.json({ message: "Holiday — attendance ignored" });
     }
 
     await Attendance.findOneAndUpdate(
-      { userId: req.userId, date: today },
+      { userId, date: today },
       { status, reason },
-      { upsert: true }
+      { upsert: true, new: true }
     );
 
     res.json({ message: "Attendance saved", date: today });
   } catch (err) {
+    console.error("POST /attendance error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 /* MARK HOLIDAY */
-app.post("/holiday", auth, async (req, res) => {
-  const today = getTodayIST();
+app.post("/holiday", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
 
-  await Holiday.findOneAndUpdate(
-    { userId: req.userId, date: today },
-    { reason: "Declared by user" },
-    { upsert: true }
-  );
+    const today = getTodayIST();
 
-  res.json({ message: "Holiday saved", date: today });
+    await Holiday.findOneAndUpdate(
+      { userId, date: today },
+      { reason: "Declared by user" },
+      { upsert: true }
+    );
+
+    res.json({ message: "Holiday saved", date: today });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
-/* GET ALL ATTENDANCE (MERGED) */
+/* ====================================================
+   FRONTEND ROUTES (AUTH REQUIRED)
+   ==================================================== */
+
+/* GET MERGED ATTENDANCE */
 app.get("/attendance/all", auth, async (req, res) => {
   try {
-    const attendance = await Attendance.find({ userId: req.userId }).lean();
-    const holidays = await Holiday.find({ userId: req.userId }).lean();
+    const userId = req.userId;
+
+    const attendance = await Attendance.find({ userId }).lean();
+    const holidays = await Holiday.find({ userId }).lean();
 
     const map = new Map();
 
@@ -136,15 +157,12 @@ app.post("/attendance/summarize", auth, async (req, res) => {
   }
 });
 
-
-
-//  ---------------------- Auth --------------------
-
+/* ====================================================
+   TELEGRAM LOGIN
+   ==================================================== */
 
 app.post("/auth/telegram", (req, res) => {
-  const data = req.body;
-
-  const { hash, ...rest } = data;
+  const { hash, ...rest } = req.body;
 
   const secret = crypto
     .createHash("sha256")
@@ -172,19 +190,14 @@ app.post("/auth/telegram", (req, res) => {
     .update(userId + process.env.JWT_SECRET)
     .digest("hex");
 
-  res.json({
-    userId,
-    token
-  });
+  res.json({ userId, token });
 });
-// ---------------------------------------------
 
-
+/* ONE-TIME LOGIN LINK */
 app.post("/auth/telegram-link", async (req, res) => {
   const { token } = req.body;
 
   const record = await LoginToken.findOne({ token });
-
   if (!record) {
     return res.status(401).json({ message: "Invalid token" });
   }
@@ -201,14 +214,10 @@ app.post("/auth/telegram-link", async (req, res) => {
     .update(userId + process.env.JWT_SECRET)
     .digest("hex");
 
-  await record.deleteOne(); // one-time use
+  await record.deleteOne();
 
-  res.json({
-    userId,
-    token: authToken
-  });
+  res.json({ userId, token: authToken });
 });
-
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 5000;

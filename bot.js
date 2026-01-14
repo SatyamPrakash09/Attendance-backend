@@ -1,156 +1,111 @@
-import fetch from "node-fetch";
 import "dotenv/config";
-import LoginToken from "./models/LoginToken.js";
-import { generateLoginToken } from "./utils/token.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const API_BASE = "https://attendance-backend-hhkn.onrender.com";
 
-/* -------------------- HELPERS -------------------- */
-function getDayIST() {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  ).getDay();
+if (!BOT_TOKEN) {
+  console.error("❌ BOT_TOKEN missing");
+  process.exit(1);
 }
 
-function generateToken(userId) {
-  // must match backend logic
-  return require("crypto")
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
+console.log("🤖 Bot started");
+
+let offset = 0;
+
+/* -------------------- HELPERS -------------------- */
+async function apiPost(path, userId, body = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": userId
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "API error");
+  return data;
 }
 
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text
-    })
+    body: JSON.stringify({ chat_id: chatId, text })
   });
 }
 
-/* -------------------- BACKEND CALLS -------------------- */
-async function apiPost(path, userId, body = {}) {
-  const token = generateToken(userId);
+/* -------------------- POLLING -------------------- */
+async function poll() {
+  try {
+    const res = await fetch(
+      `${TELEGRAM_API}/getUpdates?timeout=30&offset=${offset}`
+    );
+    const data = await res.json();
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "X-User-Id": userId
-    },
-    body: JSON.stringify(body)
-  });
+    for (const update of data.result || []) {
+      offset = update.update_id + 1;
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text);
+      if (!update.message?.text) continue;
+
+      const chatId = update.message.chat.id.toString();
+      const text = update.message.text.toLowerCase();
+
+      let reply = "I didn't understand that.";
+
+      if (text === "/start") {
+        reply =
+          "👋 Welcome to Attendance Tracker\n\n" +
+          "Commands:\n" +
+          "• present\n" +
+          "• absent <reason>\n" +
+          "• holiday\n" +
+          "• summary";
+      }
+
+      else if (text === "present") {
+        try {
+          await apiPost("/attendance", chatId, { status: "Present" });
+          reply = "✅ Present marked";
+        } catch {
+          reply = "❌ Failed to mark present";
+        }
+      }
+
+      else if (text.startsWith("absent")) {
+        const reason = text.replace("absent", "").trim() || "-";
+        try {
+          await apiPost("/attendance", chatId, {
+            status: "Absent",
+            reason
+          });
+          reply = "❌ Absent marked";
+        } catch {
+          reply = "❌ Failed to mark absent";
+        }
+      }
+
+      else if (text === "holiday") {
+        try {
+          await apiPost("/holiday", chatId);
+          reply = "📅 Holiday marked";
+        } catch {
+          reply = "❌ Failed to mark holiday";
+        }
+      }
+
+      else if (text === "summary") {
+        reply =
+          "📊 Visit the dashboard to see your AI attendance summary.";
+      }
+
+      await sendMessage(chatId, reply);
+    }
+  } catch (err) {
+    console.error("Polling error:", err.message);
   }
-
-  return res.json();
 }
 
-/* -------------------- BOT LOOP -------------------- */
-async function getUpdates(offset = 0) {
-  const res = await fetch(`${TELEGRAM_API}/getUpdates?offset=${offset}`);
-  const data = await res.json();
-
-  for (const update of data.result || []) {
-    offset = update.update_id + 1;
-
-    if (!update.message?.text) continue;
-
-    const chatId = update.message.chat.id.toString();
-    const text = update.message.text.toLowerCase();
-    if (text.startsWith("/start")) {
-      const param = text.split(" ")[1];
-
-      if (param === "login") {
-        const token = generateLoginToken(chatId);
-
-        await LoginToken.create({
-          userId: chatId.toString(),
-          token,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min
-        });
-
-        await sendMessage(
-          chatId,
-          `🔐 Login to Attendance Tracker\n\n👉 https://attendance-09.vercel.app/login?token=${token}\n\nThis link expires in 5 minutes.`
-        );
-      }
-    }
-    // Sunday OFF
-    if (getDayIST() === 0) {
-      await sendMessage(chatId, "📅 Sunday is a holiday");
-      continue;
-    }
-
-    if (text === "test") {
-      await sendMessage(chatId, "✅ Bot is working");
-    }
-
-    else if (text === "hello") {
-      await sendMessage(
-        chatId,
-        "Hello 👋\nUse:\n• present\n• absent <reason>\n• holiday\n• summary"
-      );
-    }
-
-    else if (text === "present") {
-      try {
-        await apiPost("/attendance", chatId, { status: "Present" });
-        await sendMessage(chatId, "✅ Marked PRESENT");
-      } catch {
-        await sendMessage(chatId, "❌ Failed to mark PRESENT");
-      }
-    }
-
-    else if (text.startsWith("absent")) {
-      const reason = text.replace("absent", "").trim() || "-";
-      try {
-        await apiPost("/attendance", chatId, {
-          status: "Absent",
-          reason
-        });
-        await sendMessage(chatId, `❌ Marked ABSENT\nReason: ${reason}`);
-      } catch {
-        await sendMessage(chatId, "❌ Failed to mark ABSENT");
-      }
-    }
-
-    else if (text === "holiday") {
-      try {
-        await apiPost("/holiday", chatId);
-        await sendMessage(chatId, "📅 Marked today as HOLIDAY");
-      } catch {
-        await sendMessage(chatId, "❌ Failed to mark HOLIDAY");
-      }
-    }
-
-    else if (text === "summary") {
-      try {
-        const res = await apiPost("/attendance/summarize", chatId);
-        await sendMessage(chatId, res.summary);
-      } catch {
-        await sendMessage(chatId, "❌ Could not generate summary");
-      }
-    }
-
-    else {
-      await sendMessage(
-        chatId,
-        "Unknown command.\nTry: present, absent <reason>, holiday, summary"
-      );
-    }
-  }
-
-  setTimeout(() => getUpdates(offset), 2000);
-}
-
-export default getUpdates;
+setInterval(poll, 1000);

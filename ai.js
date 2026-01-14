@@ -8,9 +8,9 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-export async function summarizeAttendance() {
-  const attendance = await Attendance.find().sort({ date: 1 }).lean();
-  const holidays = await Holiday.find().sort({ date: 1 }).lean();
+export async function summarizeAttendance(userId) {
+  const attendance = await Attendance.find(userId).sort({ date: 1 }).lean();
+  const holidays = await Holiday.find(userId).sort({ date: 1 }).lean();
 
   // Case 1: No data at all
   if (!attendance.length && !holidays.length) {
