@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
@@ -135,6 +134,49 @@ app.post("/attendance/summarize", auth, async (req, res) => {
     res.status(500).json({ message: "AI failed" });
   }
 });
+
+
+
+//  ---------------------- Auth --------------------
+
+
+app.post("/auth/telegram", (req, res) => {
+  const data = req.body;
+
+  const { hash, ...rest } = data;
+
+  const secret = crypto
+    .createHash("sha256")
+    .update(process.env.BOT_TOKEN)
+    .digest();
+
+  const checkString = Object.keys(rest)
+    .sort()
+    .map(k => `${k}=${rest[k]}`)
+    .join("\n");
+
+  const hmac = crypto
+    .createHmac("sha256", secret)
+    .update(checkString)
+    .digest("hex");
+
+  if (hmac !== hash) {
+    return res.status(401).json({ message: "Invalid Telegram login" });
+  }
+
+  const userId = rest.id.toString();
+
+  const token = crypto
+    .createHash("sha256")
+    .update(userId + process.env.JWT_SECRET)
+    .digest("hex");
+
+  res.json({
+    userId,
+    token
+  });
+});
+
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
