@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 import "dotenv/config";
+
 if (!process.env.GEMINI_API_KEY) {
   throw new Error("GEMINI_API_KEY is missing");
 }
@@ -9,16 +10,27 @@ if (!process.env.GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export async function summarizeAttendance(userId) {
-  const attendance = await Attendance.find(userId).sort({ date: 1 }).lean();
-  const holidays = await Holiday.find(userId).sort({ date: 1 }).lean();
+  if (!userId) {
+    throw new Error("userId is required for summary");
+  }
+
+  // ✅ FIX: Proper user-scoped queries
+  const attendance = await Attendance.find({ userId })
+    .sort({ date: 1 })
+    .lean();
+
+  const holidays = await Holiday.find({ userId })
+    .sort({ date: 1 })
+    .lean();
 
   // Case 1: No data at all
   if (!attendance.length && !holidays.length) {
     return "No attendance or holiday data has been recorded yet.";
   }
 
-  // Use the model ID that worked in your region test
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash"
+  });
 
   try {
     // Case 2: Only holidays declared
@@ -28,7 +40,8 @@ export async function summarizeAttendance(userId) {
       const prompt = `
 A student has not recorded attendance yet, but has declared holidays.
 Holiday dates: ${holidayDates}
-Write a short summary explaining that attendance has not started, but holidays have been recorded. Keep it friendly and clear.`;
+Write a short summary explaining that attendance has not started, but holidays have been recorded. Keep it friendly and clear.
+`;
 
       const result = await model.generateContent(prompt);
       return result.response.text();
@@ -43,18 +56,21 @@ Write a short summary explaining that attendance has not started, but holidays h
       .map(r => `${r.date}: ${r.status}`)
       .join("\n");
 
-    // --- FIXED SYNTAX ERROR HERE ---
-    const holidayDetails = holidays.length > 0 
-      ? holidays.map(h => h.date).join(", ") 
-      : "None";
+    const holidayDetails =
+      holidays.length > 0
+        ? holidays.map(h => h.date).join(", ")
+        : "None";
 
     const prompt = `
 You are summarizing a student's attendance.
+
 Total attendance days: ${totalDays}
 Present days: ${present}
 Absent days: ${absent}
+
 Attendance records:
 ${attendanceDetails}
+
 Holidays:
 ${holidayDetails}
 
@@ -67,7 +83,7 @@ Follow these rules strictly:
 - Do not mention databases, systems, AI, or internal logic.
 - Output ONLY the attendance summary in plain text.
 
-Include all of the following details clearly and accurately and strictly follow below fomat only with each data in new line:
+Include all of the following details clearly and accurately and strictly follow below format only with each data in new line:
 
 Number of present days:
 <insert total present days>
@@ -78,7 +94,9 @@ Number of absent days:
 Number of holidays:
 Total holidays: <insert total number>
 
-You must cross-check every holiday date against the official 2025 Indian Public Holiday list. If a date matches an official holiday, count it as a public holiday in India. If it was a holiday provided by me that does not match the official list, count it as a user declared holiday.
+You must cross-check every holiday date against the official 2025 Indian Public Holiday list.
+If a date matches an official holiday, count it as a public holiday in India.
+If it was a holiday provided by me that does not match the official list, count it as a user declared holiday.
 
 Breakdown of holidays:
 Public holidays in India: <insert count of public holidays and name of the public holidays with date>
