@@ -110,9 +110,13 @@ app.post("/holiday", async (req, res) => {
    ==================================================== */
 
 /* GET MERGED ATTENDANCE */
-app.get("/attendance/all", auth, async (req, res) => {
+app.get("/attendance/all", async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.query.userId || req.headers["x-user-id"];
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId required" });
+    }
 
     const attendance = await Attendance.find({ userId }).lean();
     const holidays = await Holiday.find({ userId }).lean();
@@ -142,10 +146,12 @@ app.get("/attendance/all", auth, async (req, res) => {
     );
 
     res.json(result);
-  } catch {
+  } catch (err) {
+    console.error("GET /attendance/all error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 /* AI SUMMARY */
 app.post("/attendance/summarize", auth, async (req, res) => {
