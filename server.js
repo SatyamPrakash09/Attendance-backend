@@ -86,10 +86,9 @@ app.post("/attendance", async (req, res) => {
 /* MARK HOLIDAY */
 app.post("/holiday", async (req, res) => {
   try {
-    const userId = req.query.userId || req.headers["x-user-id"];
-
+    const userId = req.headers["x-user-id"];
     if (!userId) {
-      return res.status(400).json({ message: "userId required" });
+      return res.status(400).json({ message: "UserId missing" });
     }
 
     const today = getTodayIST();
@@ -97,20 +96,14 @@ app.post("/holiday", async (req, res) => {
     await Holiday.findOneAndUpdate(
       { userId, date: today },
       { reason: "Declared by user" },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
-    res.json({
-      message: "Holiday saved",
-      userId,
-      date: today
-    });
+    res.json({ message: "Holiday saved", date: today });
   } catch (err) {
-    console.error("POST /holiday error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 /* ====================================================
    FRONTEND ROUTES (AUTH REQUIRED)
