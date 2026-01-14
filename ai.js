@@ -19,7 +19,7 @@ export async function summarizeAttendance(userId) {
     .sort({ date: 1 })
     .lean();
 
-  const holidays = await Holiday.find({ userId })
+  const holidays = await Holiday.find({ user_id: userId })
     .sort({ date: 1 })
     .lean();
 
@@ -80,7 +80,6 @@ Follow these rules strictly:
 - Do not use quotation marks.
 - Do not use markdown symbols such as **, *, or bullet icons.
 - Do not add greetings, explanations, or conclusions.
-- Do not mention databases, systems, AI, or internal logic.
 - Output ONLY the attendance summary in plain text.
 
 Include all of the following details clearly and accurately and strictly follow below format only with each data in new line:
@@ -94,17 +93,13 @@ Number of absent days:
 Number of holidays:
 Total holidays: <insert total number>
 
-You must cross-check every holiday date against the official 2025 Indian Public Holiday list.
-If a date matches an official holiday, count it as a public holiday in India.
-If it was a holiday provided by me that does not match the official list, count it as a user declared holiday.
-
 Breakdown of holidays:
 Public holidays in India: <insert count of public holidays and name of the public holidays with date>
 User-declared holidays: <insert count of holidays declared by the student>
+(Note: Classify holidays based on common knowledge of Indian holidays. If unsure, list under User-declared.)
 
 If a category has zero count, explicitly mention it as 0.
 Use clear, formal, and professional language.
-Ensure the summary is easy to read and well structured.
 `;
 
     const result = await model.generateContent(prompt);

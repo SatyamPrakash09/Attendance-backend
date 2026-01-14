@@ -94,7 +94,7 @@ app.post("/holiday", async (req, res) => {
     const today = getTodayIST();
 
     await Holiday.findOneAndUpdate(
-      { userId, date: today },
+      { userId: userId, date: today },
       { reason: "Declared by user" },
       { upsert: true }
     );
@@ -119,7 +119,7 @@ app.get("/attendance/all", async (req, res) => {
     }
 
     const attendance = await Attendance.find({ userId }).lean();
-    const holidays = await Holiday.find({ userId }).lean();
+    const holidays = await Holiday.find({ chat_id: userId }).lean();
 
     const map = new Map();
 

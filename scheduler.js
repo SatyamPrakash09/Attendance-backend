@@ -16,7 +16,6 @@ if (mongoose.connection.readyState === 0) {
 
 /* ------------------ TELEGRAM CONFIG ------------------ */
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const CHAT_ID = process.env.CHAT_ID;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 /* ------------------ HELPERS ------------------ */
@@ -55,8 +54,8 @@ cron.schedule("30 3 * * 1-6", async () => {
 
   const today = getTodayIST();
 
-  if (await Holiday.findOne({ date: today })) return;
-  if (await Attendance.findOne({ date: today })) return;
+  if (await Holiday.findOne({ user_id: CHAT_ID, date: today })) return;
+  if (await Attendance.findOne({ userId: CHAT_ID, date: today })) return;
 
   await sendMessage(
     "📘 Attendance Time\n\npresent | absent <reason> | holiday"
@@ -75,10 +74,11 @@ cron.schedule("30 5 * * 1-6", async () => {
 
   const today = getTodayIST();
 
-  if (await Holiday.findOne({ date: today })) return;
-  if (await Attendance.findOne({ date: today })) return;
+  if (await Holiday.findOne({ chat_id: CHAT_ID, date: today })) return;
+  if (await Attendance.findOne({ userId: CHAT_ID, date: today })) return;
 
   await Attendance.create({
+    userId: CHAT_ID,
     date: today,
     status: "Absent",
     reason: "Auto-marked (No response by 11:00 AM IST)"

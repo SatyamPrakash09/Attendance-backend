@@ -39,13 +39,10 @@ async function sendMessage(chatId, text) {
   });
 }
 async function markHoliday(chatId) {
-  const res = await fetch(`${API_BASE}/holiday?userId=${chatId}`, {
-    method: "POST"
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || "Holiday not saved");
+  try {
+    await apiPost("/holiday", chatId);
+  } catch (err) {
+    throw new Error(err.message || "Holiday not saved");
   }
 }
 
