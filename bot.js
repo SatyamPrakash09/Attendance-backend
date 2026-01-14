@@ -1,4 +1,12 @@
 import "dotenv/config";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config({ path: join(__dirname, ".env") });
 import { connectDB } from "./db.js";
 import User from "./models/User.js";
 await connectDB();
@@ -6,7 +14,8 @@ await connectDB();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const API_BASE = "https://attendance-backend-hhkn.onrender.com";
+// const API_BASE = "https://attendance-backend-hhkn.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
@@ -45,7 +54,7 @@ async function markHoliday(chatId) {
     throw new Error("chatId missing in bot");
   }
 
-  const url = `${API_BASE}/holiday?userId=${encodeURIComponent(String(chatId))}`;
+  const url = `${API_BASE}/holiday?chatId=${encodeURIComponent(String(chatId))}`;
 
   const res = await fetch(url, { method: "POST" });
   const data = await res.json();

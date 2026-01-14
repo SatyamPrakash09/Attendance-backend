@@ -3,6 +3,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 
 import Attendance from "./models/Attendance.js";
+import User from "./models/User.js";
 import Holiday from "./models/Holiday.js";
 
 /* ------------------ START LOG ------------------ */
@@ -31,12 +32,16 @@ function getDayIST() {
   ).getDay();
 }
 
-async function sendMessage(text) {
-  await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: CHAT_ID, text })
-  });
+async function sendMessage(chatId, text) {
+  try {
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text })
+    });
+  } catch (err) {
+    console.error(`Failed to send message to ${chatId}:`, err.message);
+  }
 }
 
 /* ------------------ TEST CRON (every minute) ------------------ */
@@ -53,17 +58,29 @@ cron.schedule("30 3 * * 1-6", async () => {
   if (getDayIST() === 0) return;
 
   const today = getTodayIST();
+  const users = await User.find({});
 
-  if (await Holiday.findOne({ user_id: CHAT_ID, date: today })) return;
-  if (await Attendance.findOne({ userId: CHAT_ID, date: today })) return;
+  for (const user of users) {
+    if (!user.userId) continue;
 
-  await sendMessage(
-    "📘 Attendance Time\n\npresent | absent <reason> | holiday"
-  );
+    const holiday = await Holiday.findOne({ userId: user.userId, date: today });
+    if (holiday) continue;
 
-  console.log("📩 Prompt sent");
+    const attendance = await Attendance.findOne({ userId: user.userId, date: today });
+    if (attendance) continue;
+
+    await sendMessage(
+      user.userId,
+      "📘 Attendance Time\n\npresent | absent <reason> | holiday"
+    );
+  }
+
+  console.log(`📩 Prompt process completed for ${users.length} users`);
 });
 
+/* =====================================================
+   ⏰ AUTO ABSENT — 11:00 AM IST (05:30 UTC)
+   ===================================================== */
 /* =====================================================
    ⏰ AUTO ABSENT — 11:00 AM IST (05:30 UTC)
    ===================================================== */
@@ -73,20 +90,33 @@ cron.schedule("30 5 * * 1-6", async () => {
   if (getDayIST() === 0) return;
 
   const today = getTodayIST();
+  const users = await User.find({});
 
-  if (await Holiday.findOne({ chat_id: CHAT_ID, date: today })) return;
-  if (await Attendance.findOne({ userId: CHAT_ID, date: today })) return;
+  for (const user of users) {
+    if (!user.userId) continue;
 
-  await Attendance.create({
-    userId: CHAT_ID,
-    date: today,
-    status: "Absent",
-    reason: "Auto-marked (No response by 11:00 AM IST)"
-  });
+    // Check holiday
+    const holiday = await Holiday.findOne({ userId: user.userId, date: today });
+    if (holiday) continue;
 
-  await sendMessage("⚠️ Marked ABSENT (no response)");
+    // Check attendance
+    const attendance = await Attendance.findOne({ userId: user.userId, date: today });
+    if (attendance) continue;
 
-  console.log("❌ Auto-absent recorded");
+    // Mark absent
+    try {
+      await Attendance.create({
+        userId: user.userId,
+        date: today,
+        status: "Absent",
+        reason: "Auto-marked (No response by 11:00 AM IST)"
+      });
+      await sendMessage(user.userId, "⚠️ Marked ABSENT (no response)");
+      console.log(`❌ Auto-absent recorded for ${user.name}`);
+    } catch (err) {
+      console.error(`Error marking absent for ${user.userId}:`, err.message);
+    }
+  }
 });
 
 console.log("✅ Scheduler initialized");

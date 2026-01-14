@@ -2,8 +2,9 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import User from "./models/User.js";
+
 import { connectDB } from "./db.js";
+import User from "./models/User.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 import LoginToken from "./models/LoginToken.js";
@@ -14,28 +15,6 @@ const app = express();
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(cors());
 app.use(express.json());
-
-/* -------------------- AUTH (FRONTEND ONLY) -------------------- */
-function auth(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-  const userId = req.headers["x-user-id"];
-
-  if (!token || !userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const validToken = crypto
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
-
-  if (token !== validToken) {
-    return res.status(401).json({ message: "Invalid token" });
-  }
-
-  req.userId = userId;
-  next();
-}
 
 /* -------------------- DB -------------------- */
 await connectDB();
@@ -51,18 +30,22 @@ function getTodayIST() {
 app.get("/health", (_, res) => res.send("OK"));
 
 /* ====================================================
-   BOT ROUTES (NO AUTH)
+   CORE ROUTES (BOT + FRONTEND)
    ==================================================== */
 
 /* SAVE / UPDATE ATTENDANCE */
 app.post("/attendance", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"];
+    const userId = req.query.userId || req.headers["x-user-id"];
     if (!userId) {
       return res.status(400).json({ message: "UserId missing" });
     }
 
     const { status, reason = "-" } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: "Status required" });
+    }
+
     const today = getTodayIST();
 
     const holiday = await Holiday.findOne({ userId, date: today });
@@ -76,7 +59,12 @@ app.post("/attendance", async (req, res) => {
       { upsert: true, new: true }
     );
 
-    res.json({ message: "Attendance saved", date: today });
+    res.json({
+      message: "Attendance saved",
+      userId,
+      date: today,
+      status
+    });
   } catch (err) {
     console.error("POST /attendance error:", err);
     res.status(500).json({ message: "Server error" });
@@ -86,7 +74,7 @@ app.post("/attendance", async (req, res) => {
 /* MARK HOLIDAY */
 app.post("/holiday", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"];
+    const userId = req.query.userId || req.headers["x-user-id"];
     if (!userId) {
       return res.status(400).json({ message: "UserId missing" });
     }
@@ -94,32 +82,34 @@ app.post("/holiday", async (req, res) => {
     const today = getTodayIST();
 
     await Holiday.findOneAndUpdate(
-      { userId: userId, date: today },
+      { userId, date: today },
       { reason: "Declared by user" },
-      { upsert: true }
+      { upsert: true, new: true }
     );
 
-    res.json({ message: "Holiday saved", date: today });
+    res.json({
+      message: "Holiday saved",
+      userId,
+      date: today
+    });
   } catch (err) {
+    console.error("POST /holiday error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* ====================================================
-   FRONTEND ROUTES (AUTH REQUIRED)
-   ==================================================== */
-
-/* GET MERGED ATTENDANCE */
+/* GET ALL ATTENDANCE (MERGED) */
 app.get("/attendance/all", async (req, res) => {
   try {
     const userId = req.query.userId || req.headers["x-user-id"];
-
     if (!userId) {
       return res.status(400).json({ message: "userId required" });
     }
 
-    const attendance = await Attendance.find({ userId }).lean();
-    const holidays = await Holiday.find({ chat_id: userId }).lean();
+    const [attendance, holidays] = await Promise.all([
+      Attendance.find({ userId }).lean(),
+      Holiday.find({ userId }).lean()
+    ]);
 
     const map = new Map();
 
@@ -152,19 +142,42 @@ app.get("/attendance/all", async (req, res) => {
   }
 });
 
-
-/* AI SUMMARY */
-app.post("/attendance/summarize", auth, async (req, res) => {
+/* AI SUMMARY (NO AUTH — BOT IDENTITY ONLY) */
+app.post("/attendance/summarize", async (req, res) => {
   try {
-    const summary = await summarizeAttendance(req.userId);
+    const userId = req.query.userId || req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(400).json({ message: "userId required" });
+    }
+
+    const summary = await summarizeAttendance(userId);
     res.json({ summary });
-  } catch {
+  } catch (err) {
+    console.error("Summary error:", err);
     res.status(500).json({ message: "AI failed" });
   }
 });
 
 /* ====================================================
-   TELEGRAM LOGIN
+   USER INFO
+   ==================================================== */
+
+app.get("/user", async (req, res) => {
+  const userId = req.query.userId || req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(400).json({ message: "userId required" });
+  }
+
+  const user = await User.findOne({ userId });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.json(user);
+});
+
+/* ====================================================
+   OPTIONAL: TELEGRAM LOGIN (KEEP OR REMOVE LATER)
    ==================================================== */
 
 app.post("/auth/telegram", (req, res) => {
@@ -190,87 +203,7 @@ app.post("/auth/telegram", (req, res) => {
   }
 
   const userId = rest.id.toString();
-
-  const token = crypto
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
-
-  res.json({ userId, token });
-});
-
-
-
-// --------------------------------------------------------------------
-
-app.post("/holiday", async (req, res) => {
-  try {
-    const userId = req.query.userId || req.headers["x-user-id"];
-
-    if (!userId) {
-      return res.status(400).json({ message: "UserId missing" });
-    }
-
-    const today = getTodayIST();
-
-    await Holiday.findOneAndUpdate(
-      { userId, date: today },
-      { reason: "Declared by user" },
-      { upsert: true, new: true }
-    );
-
-    res.json({ message: "Holiday saved", date: today });
-  } catch (err) {
-    console.error("POST /holiday error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-// -------------------------------------------
-
-app.get("/user", async (req, res) => {
-  const userId = req.query.userId;
-
-  if (!userId) {
-    return res.status(400).json({ message: "userId required" });
-  }
-
-  const user = await User.findOne({ userId });
-
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-
-  res.json(user);
-});
-
-// --------------------------------------------------------------------
-
-/* ONE-TIME LOGIN LINK */
-app.post("/auth/telegram-link", async (req, res) => {
-  const { token } = req.body;
-
-  const record = await LoginToken.findOne({ token });
-  if (!record) {
-    return res.status(401).json({ message: "Invalid token" });
-  }
-
-  if (record.expiresAt < new Date()) {
-    await record.deleteOne();
-    return res.status(401).json({ message: "Token expired" });
-  }
-
-  const userId = record.userId;
-
-  const authToken = crypto
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
-
-  await record.deleteOne();
-
-  res.json({ userId, token: authToken });
+  res.json({ userId });
 });
 
 /* -------------------- SERVER -------------------- */

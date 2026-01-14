@@ -19,7 +19,7 @@ export async function summarizeAttendance(userId) {
     .sort({ date: 1 })
     .lean();
 
-  const holidays = await Holiday.find({ user_id: userId })
+  const holidays = await Holiday.find({ userId: userId })
     .sort({ date: 1 })
     .lean();
 
