@@ -1,4 +1,6 @@
 import "dotenv/config";
+import User from "./models/User.js";
+
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -56,15 +58,30 @@ async function poll() {
       let reply = "I didn't understand that.";
 
       if (text === "/start") {
-        reply =
-          "👋 Welcome to Attendance Tracker\n\n" +
-          "Commands:\n" +
-          `https://attendance-09.vercel.app/?uid=${chatId}\n\n`+
-          "• present\n" +
-          "• absent <reason>\n" +
-          "• holiday\n" +
-          "• summary";
+        const firstName = update.message.from.first_name || "";
+        const username = update.message.from.username || "";
+
+        const existing = await User.findOne({ userId: chatId });
+
+        if (!existing) {
+          await User.create({
+            userId: chatId,
+            name: firstName,
+            username
+          });
+
+          await sendMessage(
+            chatId,
+            `👋 Hi ${firstName}!\n\nI've set up your attendance tracker.\n\nSend:\n• present\n• absent <reason>\n• holiday\n• summary`
+          );
+        } else {
+          await sendMessage(
+            chatId,
+            `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+          );
+        }
       }
+
 
       else if (text === "present") {
         try {

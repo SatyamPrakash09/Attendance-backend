@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-
+import User from "./models/User.js";
 import { connectDB } from "./db.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
@@ -198,6 +198,29 @@ app.post("/auth/telegram", (req, res) => {
 
   res.json({ userId, token });
 });
+
+
+
+// --------------------------------------------------------------------
+
+
+app.get("/user", async (req, res) => {
+  const userId = req.query.userId;
+
+  if (!userId) {
+    return res.status(400).json({ message: "userId required" });
+  }
+
+  const user = await User.findOne({ userId });
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.json(user);
+});
+
+// --------------------------------------------------------------------
 
 /* ONE-TIME LOGIN LINK */
 app.post("/auth/telegram-link", async (req, res) => {
