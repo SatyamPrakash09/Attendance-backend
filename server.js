@@ -61,11 +61,11 @@ app.post("/attendance", async (req, res) => {
 
     const { status, reason = "-" } = req.body;
     const today = getTodayIST();
-    await holiday.deleteOne({ userId, date: today });
-    const holiday = await Holiday.findOne({ userId, date: today });
-    if (holiday) {
-      return res.json({ message: "Holiday — attendance ignored" });
-    }
+    await Holiday.deleteOne({ userId, date: today });
+    // const holiday = await Holiday.findOne({ userId, date: today });
+    // if (holiday) {
+    //   return res.json({ message: "Holiday — attendance ignored" });
+    // }
 
     await Attendance.findOneAndUpdate(
       { userId, date: today },     // ✅ FIX
