@@ -55,7 +55,9 @@ app.get("/health", (_, res) => res.send("OK"));
 app.post("/attendance", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] || req.query.userId;
-    if (!userId) return res.status(400).json({ message: "UserId missing" });
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
 
     const { status, reason = "-" } = req.body;
     const today = getTodayIST();
@@ -66,17 +68,23 @@ app.post("/attendance", async (req, res) => {
     }
 
     await Attendance.findOneAndUpdate(
-      { userId, date },
-      { $set: { status: "Present", reason: "-" } },
+      { userId, date: today },     // ✅ FIX
+      { status, reason },          // ✅ FIX
       { upsert: true, new: true }
     );
 
-
-    res.json({ message: "Attendance saved", date: today });
+    res.json({
+      message: "Attendance saved",
+      date: today,
+      userId
+    });
   } catch (err) {
+    console.error("POST /attendance ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 /* -------------------- HOLIDAY -------------------- */
 app.post("/holiday", async (req, res) => {
