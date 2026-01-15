@@ -66,10 +66,11 @@ app.post("/attendance", async (req, res) => {
     }
 
     await Attendance.findOneAndUpdate(
-      { userId, date: today },
-      { status, reason },
-      { upsert: true }
+      { userId, date },
+      { $set: { status: "Present", reason: "-" } },
+      { upsert: true, new: true }
     );
+
 
     res.json({ message: "Attendance saved", date: today });
   } catch (err) {

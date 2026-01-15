@@ -6,7 +6,7 @@ const attendanceSchema = new mongoose.Schema({
     required: true
   },
   date: {
-    type: String,
+    type: String, // YYYY-MM-DD
     required: true
   },
   status: {
@@ -20,7 +20,10 @@ const attendanceSchema = new mongoose.Schema({
   }
 });
 
-// One record per user per day
-attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
+// ✅ one attendance per user per date
+attendanceSchema.index(
+  { userId: 1, date: 1 },
+  { unique: true }
+);
 
 export default mongoose.model("Attendance", attendanceSchema);

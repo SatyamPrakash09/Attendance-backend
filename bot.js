@@ -110,7 +110,7 @@ async function poll() {
       if (!update.message?.text) continue;
 
       const chatId = update.message.chat.id.toString();
-      const name = update.message.from.username
+      const name = update.message.from.username;
       const text = update.message.text.toLowerCase();
 
       let reply = `Incorrect Command !!!!!!!!!
@@ -135,12 +135,12 @@ async function poll() {
 
           await sendMessage(
             chatId,
-            `👋 Hi ${name}!\n\nI've set up your attendance tracker.\n\nSend:\n• present\n• absent <reason>\n• holiday\n• summary`
+            `👋 Hi ${firstName}!\n\nI've set up your attendance tracker.\n\nSend:\n• present\n• absent <reason>\n• holiday\n• summary`
           );
         } else {
           await sendMessage(
             chatId,
-            `👋 Welcome back ${name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+            `👋 Welcome back ${firstName}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
           );
         }
         continue; // ✅ Skip default reply
