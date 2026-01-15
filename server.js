@@ -16,6 +16,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+/* -------------------- AUTH -------------------- */
+function auth(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  const userId = req.headers["x-user-id"] || req.query.userId;
+
+  if (!token || !userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const validToken = crypto
+    .createHash("sha256")
+    .update(userId + process.env.JWT_SECRET)
+    .digest("hex");
+
+  if (token !== validToken) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+
+  req.userId = userId;
+  next();
+}
+
 /* -------------------- DB -------------------- */
 await connectDB();
 
@@ -29,23 +51,13 @@ function getTodayIST() {
 /* -------------------- HEALTH -------------------- */
 app.get("/health", (_, res) => res.send("OK"));
 
-/* ====================================================
-   CORE ROUTES (BOT + FRONTEND)
-   ==================================================== */
-
-/* SAVE / UPDATE ATTENDANCE */
+/* -------------------- ATTENDANCE -------------------- */
 app.post("/attendance", async (req, res) => {
   try {
-    const userId = req.query.userId || req.headers["x-user-id"];
-    if (!userId) {
-      return res.status(400).json({ message: "UserId missing" });
-    }
+    const userId = req.headers["x-user-id"] || req.query.userId;
+    if (!userId) return res.status(400).json({ message: "UserId missing" });
 
     const { status, reason = "-" } = req.body;
-    if (!status) {
-      return res.status(400).json({ message: "Status required" });
-    }
-
     const today = getTodayIST();
 
     const holiday = await Holiday.findOne({ userId, date: today });
@@ -56,25 +68,19 @@ app.post("/attendance", async (req, res) => {
     await Attendance.findOneAndUpdate(
       { userId, date: today },
       { status, reason },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
-    res.json({
-      message: "Attendance saved",
-      userId,
-      date: today,
-      status
-    });
+    res.json({ message: "Attendance saved", date: today });
   } catch (err) {
-    console.error("POST /attendance error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* MARK HOLIDAY */
+/* -------------------- HOLIDAY -------------------- */
 app.post("/holiday", async (req, res) => {
   try {
-    const userId = req.query.userId || req.headers["x-user-id"];
+    const userId = req.headers["x-user-id"] || req.query.userId;
     if (!userId) {
       return res.status(400).json({ message: "UserId missing" });
     }
@@ -84,42 +90,30 @@ app.post("/holiday", async (req, res) => {
     await Holiday.findOneAndUpdate(
       { userId, date: today },
       { reason: "Declared by user" },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
-    res.json({
-      message: "Holiday saved",
-      userId,
-      date: today
-    });
+    res.json({ message: "Holiday saved", date: today });
   } catch (err) {
-    console.error("POST /holiday error:", err);
+    console.error("Holiday error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* GET ALL ATTENDANCE (MERGED) */
+/* -------------------- GET ALL -------------------- */
 app.get("/attendance/all", async (req, res) => {
   try {
     const userId = req.query.userId || req.headers["x-user-id"];
-    if (!userId) {
-      return res.status(400).json({ message: "userId required" });
-    }
+    if (!userId) return res.status(400).json({ message: "userId required" });
 
-    const [attendance, holidays] = await Promise.all([
-      Attendance.find({ userId }).lean(),
-      Holiday.find({ userId }).lean()
-    ]);
+    const attendance = await Attendance.find({ userId }).lean();
+    const holidays = await Holiday.find({ userId }).lean();
 
     const map = new Map();
 
-    attendance.forEach(a => {
-      map.set(a.date, {
-        date: a.date,
-        status: a.status,
-        reason: a.reason
-      });
-    });
+    attendance.forEach(a =>
+      map.set(a.date, { date: a.date, status: a.status, reason: a.reason })
+    );
 
     holidays.forEach(h => {
       if (!map.has(h.date)) {
@@ -136,74 +130,27 @@ app.get("/attendance/all", async (req, res) => {
     );
 
     res.json(result);
-  } catch (err) {
-    console.error("GET /attendance/all error:", err);
+  } catch {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/* AI SUMMARY (NO AUTH — BOT IDENTITY ONLY) */
-app.post("/attendance/summarize", async (req, res) => {
+/* -------------------- AI SUMMARY -------------------- */
+app.post("/attendance/summarize", auth, async (req, res) => {
   try {
-    const userId = req.query.userId || req.headers["x-user-id"];
-    if (!userId) {
-      return res.status(400).json({ message: "userId required" });
-    }
-
-    const summary = await summarizeAttendance(userId);
+    const summary = await summarizeAttendance(req.userId);
     res.json({ summary });
-  } catch (err) {
-    console.error("Summary error:", err);
+  } catch {
     res.status(500).json({ message: "AI failed" });
   }
 });
 
-/* ====================================================
-   USER INFO
-   ==================================================== */
-
+/* -------------------- USER -------------------- */
 app.get("/user", async (req, res) => {
-  const userId = req.query.userId || req.headers["x-user-id"];
-  if (!userId) {
-    return res.status(400).json({ message: "userId required" });
-  }
-
+  const userId = req.query.userId;
   const user = await User.findOne({ userId });
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-
+  if (!user) return res.status(404).json({ message: "User not found" });
   res.json(user);
-});
-
-/* ====================================================
-   OPTIONAL: TELEGRAM LOGIN (KEEP OR REMOVE LATER)
-   ==================================================== */
-
-app.post("/auth/telegram", (req, res) => {
-  const { hash, ...rest } = req.body;
-
-  const secret = crypto
-    .createHash("sha256")
-    .update(process.env.BOT_TOKEN)
-    .digest();
-
-  const checkString = Object.keys(rest)
-    .sort()
-    .map(k => `${k}=${rest[k]}`)
-    .join("\n");
-
-  const hmac = crypto
-    .createHmac("sha256", secret)
-    .update(checkString)
-    .digest("hex");
-
-  if (hmac !== hash) {
-    return res.status(401).json({ message: "Invalid Telegram login" });
-  }
-
-  const userId = rest.id.toString();
-  res.json({ userId });
 });
 
 /* -------------------- SERVER -------------------- */

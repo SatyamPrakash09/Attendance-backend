@@ -14,8 +14,8 @@ await connectDB();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-// const API_BASE = "https://attendance-backend-hhkn.onrender.com";
-const API_BASE = "http://localhost:5000";
+const API_BASE = process.env.VITE_API_BASE;
+
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
@@ -49,12 +49,13 @@ async function sendMessage(chatId, text) {
     body: JSON.stringify({ chat_id: chatId, text })
   });
 }
+
 async function markHoliday(chatId) {
   if (!chatId) {
     throw new Error("chatId missing in bot");
   }
 
-  const url = `${API_BASE}/holiday?chatId=${encodeURIComponent(String(chatId))}`;
+  const url = `${API_BASE}/holiday?userId=${encodeURIComponent(String(chatId))}`;
 
   const res = await fetch(url, { method: "POST" });
   const data = await res.json();
@@ -65,6 +66,7 @@ async function markHoliday(chatId) {
 
   return data;
 }
+
 
 
 
