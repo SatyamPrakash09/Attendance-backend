@@ -97,17 +97,22 @@ app.post("/holiday", async (req, res) => {
     const today = getTodayIST();
 
     await Holiday.findOneAndUpdate(
-      { userId, date: today },
-      { reason: "Declared by user" },
-      { upsert: true }
+      { userId, date: today },          // ✅ FIXED
+      { $set: { reason: "Declared by user" } },
+      { upsert: true, new: true }
     );
 
-    res.json({ message: "Holiday saved", date: today });
+    res.json({
+      message: "Holiday saved",
+      date: today,
+      userId
+    });
   } catch (err) {
-    console.error("Holiday error:", err);
+    console.error("POST /holiday ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 /* -------------------- GET ALL -------------------- */
 app.get("/attendance/all", async (req, res) => {
