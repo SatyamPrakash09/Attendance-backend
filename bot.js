@@ -57,11 +57,11 @@ async function markHoliday(chatId) {
 
   const url = `${API_BASE}/holiday?userId=${encodeURIComponent(String(chatId))}`;
 
-  const res = await fetch(url, { method: "POST" });
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.message || "Holiday not saved");
+    // This will now catch the "UserId missing" message from the server
+    throw new Error(data.message || "Holiday not saved"); 
   }
 
   return data;
