@@ -27,14 +27,13 @@ if (!API_BASE) {
 }
 
 console.log("🤖 Bot started");
-console.log("📡 API_BASE:", API_BASE);
 
 let offset = 0;
 
 /* -------------------- HELPERS -------------------- */
 async function apiPost(path, userId, body = {}) {
   const url = `${API_BASE}${path}`;
-  console.log(`📤 API Call: ${url}`);
+  // console.log(`📤 API Call: ${url}`);
   
   try {
     const res = await fetch(url, {
@@ -48,7 +47,7 @@ async function apiPost(path, userId, body = {}) {
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "API error");
-    console.log(`✅ API Success: ${path}`);
+    console.log(`✅ API Success`);
     return data;
   } catch (error) {
     console.error(`❌ API Failed: ${url}`);
@@ -111,6 +110,7 @@ async function poll() {
       if (!update.message?.text) continue;
 
       const chatId = update.message.chat.id.toString();
+      const name = update.message.from.username
       const text = update.message.text.toLowerCase();
 
       let reply = `Incorrect Command !!!!!!!!!
@@ -135,12 +135,12 @@ async function poll() {
 
           await sendMessage(
             chatId,
-            `👋 Hi ${firstName}!\n\nI've set up your attendance tracker.\n\nSend:\n• present\n• absent <reason>\n• holiday\n• summary`
+            `👋 Hi ${name}!\n\nI've set up your attendance tracker.\n\nSend:\n• present\n• absent <reason>\n• holiday\n• summary`
           );
         } else {
           await sendMessage(
             chatId,
-            `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+            `👋 Welcome back ${name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
           );
         }
         continue; // ✅ Skip default reply
@@ -149,7 +149,7 @@ async function poll() {
       if (text === "present") {
         try {
           await apiPost(`/attendance`,chatId,{ status: "Present" });
-          reply = "✅ Present marked";
+          reply = `✅ Present marked for ${name} `;
         } catch (err) {
           console.error("Present error:", err.message);
           reply = "❌ Failed to mark present";
@@ -162,7 +162,7 @@ async function poll() {
             status: "Absent",
             reason
           });
-          reply = "❌ Absent marked";
+          reply = `❌ Absent marked for ${name}`;
         } catch (err) {
           console.error("Absent error:", err.message);
           reply = "❌ Failed to mark absent";

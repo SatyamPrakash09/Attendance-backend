@@ -82,7 +82,6 @@ app.post("/holiday", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] || req.query.userId;
     if (!userId) {
-      console.log("❌ Debug: No UserId found in query or headers");
       return res.status(400).json({ message: "UserId missing" });
     }
 
@@ -94,7 +93,7 @@ app.post("/holiday", async (req, res) => {
       { upsert: true }
     );
 
-    res.json({ message: "Holiday saved", userId, date: today });
+    res.json({ message: "Holiday saved", date: today });
   } catch (err) {
     console.error("Holiday error:", err);
     res.status(500).json({ message: "Server error" });
