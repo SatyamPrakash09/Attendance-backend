@@ -61,7 +61,7 @@ app.post("/attendance", async (req, res) => {
 
     const { status, reason = "-" } = req.body;
     const today = getTodayIST();
-
+    await holiday.deleteOne({ userId, date: today });
     const holiday = await Holiday.findOne({ userId, date: today });
     if (holiday) {
       return res.json({ message: "Holiday — attendance ignored" });
@@ -93,8 +93,9 @@ app.post("/holiday", async (req, res) => {
     if (!userId) {
       return res.status(400).json({ message: "UserId missing" });
     }
-
     const today = getTodayIST();
+
+    await Attendance.deleteOne({ userId, date: today });
 
     await Holiday.findOneAndUpdate(
       { userId, date: today },          // ✅ FIXED
