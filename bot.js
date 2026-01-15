@@ -11,35 +11,50 @@ import { connectDB } from "./db.js";
 import User from "./models/User.js";
 await connectDB();
 
-
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const API_BASE = process.env.VITE_API_BASE;
-
+const API_BASE = process.env.API_BASE || process.env.VITE_API_BASE;
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
   process.exit(1);
 }
 
+if (!API_BASE) {
+  console.error("❌ API_BASE missing");
+  console.error("Please set API_BASE or VITE_API_BASE in your .env file");
+  process.exit(1);
+}
+
 console.log("🤖 Bot started");
+console.log("📡 API_BASE:", API_BASE);
 
 let offset = 0;
 
 /* -------------------- HELPERS -------------------- */
 async function apiPost(path, userId, body = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-User-Id": userId
-    },
-    body: JSON.stringify(body)
-  });
+  const url = `${API_BASE}${path}`;
+  console.log(`📤 API Call: ${url}`);
+  
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": userId
+      },
+      body: JSON.stringify(body)
+    });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "API error");
-  return data;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "API error");
+    console.log(`✅ API Success: ${path}`);
+    return data;
+  } catch (error) {
+    console.error(`❌ API Failed: ${url}`);
+    console.error(`Error: ${error.message}`);
+    throw error;
+  }
 }
 
 async function sendMessage(chatId, text) {
@@ -56,20 +71,31 @@ async function markHoliday(chatId) {
   }
 
   const url = `${API_BASE}/holiday?userId=${encodeURIComponent(String(chatId))}`;
+  console.log(`📤 Holiday Call: ${url}`);
 
-  const data = await res.json();
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(chatId)
+      }
+    });
 
-  if (!res.ok) {
-    // This will now catch the "UserId missing" message from the server
-    throw new Error(data.message || "Holiday not saved"); 
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Holiday not saved"); 
+    }
+
+    console.log(`✅ Holiday Success`);
+    return data;
+  } catch (error) {
+    console.error(`❌ Holiday Failed: ${url}`);
+    console.error(`Error: ${error.message}`);
+    throw error;
   }
-
-  return data;
 }
-
-
-
-
 
 /* -------------------- POLLING -------------------- */
 async function poll() {
@@ -117,18 +143,18 @@ async function poll() {
             `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
           );
         }
+        continue; // ✅ Skip default reply
       }
-
 
       if (text === "present") {
         try {
-          await apiPost("/attendance", chatId, { status: "Present" });
+          await apiPost(`/attendance`,chatId,{ status: "Present" });
           reply = "✅ Present marked";
-        } catch {
+        } catch (err) {
+          console.error("Present error:", err.message);
           reply = "❌ Failed to mark present";
         }
       }
-
       else if (text.startsWith("absent")) {
         const reason = text.replace("absent", "").trim() || "-";
         try {
@@ -137,7 +163,8 @@ async function poll() {
             reason
           });
           reply = "❌ Absent marked";
-        } catch {
+        } catch (err) {
+          console.error("Absent error:", err.message);
           reply = "❌ Failed to mark absent";
         }
       }
@@ -149,15 +176,10 @@ async function poll() {
           console.error("Holiday error:", err.message);
           await sendMessage(chatId, "❌ Holiday not saved");
         }
-        continue; // ⬅️ IMPORTANT
+        continue; // ⬅️ IMPORTANT: Skip default reply
       }
-
-
-
-
       else if (text === "summary") {
-        reply =
-          "📊 Visit the dashboard to see your AI attendance summary.";
+        reply = "📊 Visit the dashboard to see your AI attendance summary.";
       }
 
       await sendMessage(chatId, reply);
