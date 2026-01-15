@@ -1,190 +1,176 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import crypto from "crypto";
-
+import fetch from "node-fetch";
 import { connectDB } from "./db.js";
 import User from "./models/User.js";
-import Attendance from "./models/Attendance.js";
-import Holiday from "./models/Holiday.js";
-import { summarizeAttendance } from "./ai.js";
 
-const app = express();
+/* -------------------- CONFIG -------------------- */
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const API_BASE = process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com";
 
-/* -------------------- MIDDLEWARE -------------------- */
-app.use(cors());
-app.use(express.json());
-
-/* -------------------- AUTH -------------------- */
-function auth(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-  const userId = req.headers["x-user-id"] || req.query.userId;
-
-  if (!token || !userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const validToken = crypto
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
-
-  if (token !== validToken) {
-    return res.status(401).json({ message: "Invalid token" });
-  }
-
-  req.userId = userId;
-  next();
+if (!BOT_TOKEN) {
+  console.error("❌ BOT_TOKEN missing");
+  process.exit(1);
 }
 
-/* -------------------- DB -------------------- */
 await connectDB();
+console.log("🤖 Bot started");
+
+/* -------------------- STATE -------------------- */
+let offset = 0;
 
 /* -------------------- HELPERS -------------------- */
-function getTodayIST() {
-  return new Date().toLocaleDateString("en-CA", {
-    timeZone: "Asia/Kolkata"
+async function sendMessage(chatId, text) {
+  await fetch(`${TELEGRAM_API}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text
+    })
   });
 }
 
-/* -------------------- HEALTH -------------------- */
-app.get("/health", (_, res) => res.send("OK"));
+async function apiPost(path, userId, body = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": userId
+    },
+    body: JSON.stringify(body)
+  });
 
-/* ====================================================
-   ATTENDANCE
-   ==================================================== */
-app.post("/attendance", async (req, res) => {
-  try {
-    const userId = req.headers["x-user-id"] || req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ message: "UserId missing" });
-    }
-
-    const { status, reason = "-" } = req.body;
-    const today = getTodayIST();
-
-    // ✅ Remove holiday if exists
-    await Holiday.deleteOne({ userId, date: today });
-
-    await Attendance.findOneAndUpdate(
-      { userId, date: today },
-      { status, reason },
-      { upsert: true, new: true }
-    );
-
-    res.json({
-      message: "Attendance saved",
-      date: today,
-      userId
-    });
-  } catch (err) {
-    console.error("POST /attendance ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "API error");
   }
-});
+  return data;
+}
 
-/* ====================================================
-   HOLIDAY
-   ==================================================== */
-app.post("/holiday", async (req, res) => {
-  try {
-    const userId = req.headers["x-user-id"] || req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ message: "UserId missing" });
-    }
-
-    const today = getTodayIST();
-
-    // ✅ Remove attendance if exists
-    await Attendance.deleteOne({ userId, date: today });
-
-    await Holiday.findOneAndUpdate(
-      { userId, date: today },
-      { reason: "Declared by user" },
-      { upsert: true, new: true }
-    );
-
-    res.json({
-      message: "Holiday saved",
-      date: today,
-      userId
-    });
-  } catch (err) {
-    console.error("POST /holiday ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-/* ====================================================
-   GET ALL ATTENDANCE (MERGED)
-   ==================================================== */
-app.get("/attendance/all", async (req, res) => {
-  try {
-    const userId = req.query.userId || req.headers["x-user-id"];
-    if (!userId) {
-      return res.status(400).json({ message: "userId required" });
-    }
-
-    const attendance = await Attendance.find({ userId }).lean();
-    const holidays = await Holiday.find({ userId }).lean();
-
-    const map = new Map();
-
-    attendance.forEach(a =>
-      map.set(a.date, {
-        date: a.date,
-        status: a.status,
-        reason: a.reason
-      })
-    );
-
-    holidays.forEach(h => {
-      if (!map.has(h.date)) {
-        map.set(h.date, {
-          date: h.date,
-          status: "Holiday",
-          reason: h.reason || "Holiday"
-        });
+async function markHoliday(userId) {
+  const res = await fetch(
+    `${API_BASE}/holiday?userId=${encodeURIComponent(userId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": userId
       }
-    });
+    }
+  );
 
-    const result = [...map.values()].sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
-
-    res.json(result);
-  } catch (err) {
-    console.error("GET /attendance/all ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Holiday failed");
   }
-});
+  return data;
+}
 
-/* ====================================================
-   AI SUMMARY
-   ==================================================== */
-app.post("/attendance/summarize", auth, async (req, res) => {
+/* -------------------- POLLING LOOP -------------------- */
+async function poll() {
   try {
-    const summary = await summarizeAttendance(req.userId);
-    res.json({ summary });
-  } catch {
-    res.status(500).json({ message: "AI failed" });
-  }
-});
+    const res = await fetch(
+      `${TELEGRAM_API}/getUpdates?timeout=30&offset=${offset}`
+    );
+    const data = await res.json();
 
-/* ====================================================
-   USER INFO
-   ==================================================== */
-app.get("/user", async (req, res) => {
-  const userId = req.query.userId;
-  const user = await User.findOne({ userId });
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-  res.json(user);
-});
+    for (const update of data.result || []) {
+      offset = update.update_id + 1;
 
-/* -------------------- SERVER -------------------- */
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+      if (!update.message?.text) continue;
+
+      const chatId = update.message.chat.id.toString();
+      const text = update.message.text.trim().toLowerCase();
+      const firstName = update.message.from.first_name || "there";
+      const username = update.message.from.username || "";
+
+      /* -------------------- /start -------------------- */
+      if (text === "/start") {
+        const existing = await User.findOne({ userId: chatId });
+
+        if (!existing) {
+          await User.create({
+            userId: chatId,
+            name: firstName,
+            username
+          });
+
+          await sendMessage(
+            chatId,
+            `👋 Hi ${firstName}!\n\nYour attendance tracker is ready.\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary`
+          );
+        } else {
+          await sendMessage(
+            chatId,
+            `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+          );
+        }
+        continue;
+      }
+
+      /* -------------------- PRESENT -------------------- */
+      if (text === "present") {
+        try {
+          await apiPost("/attendance", chatId, {
+            status: "Present"
+          });
+          await sendMessage(chatId, "✅ Present marked successfully");
+        } catch (err) {
+          console.error("Present error:", err.message);
+          await sendMessage(chatId, "❌ Failed to mark present");
+        }
+        continue;
+      }
+
+      /* -------------------- ABSENT -------------------- */
+      if (text.startsWith("absent")) {
+        const reason = text.replace("absent", "").trim() || "-";
+        try {
+          await apiPost("/attendance", chatId, {
+            status: "Absent",
+            reason
+          });
+          await sendMessage(chatId, `❌ Absent marked\nReason: ${reason}`);
+        } catch (err) {
+          console.error("Absent error:", err.message);
+          await sendMessage(chatId, "❌ Failed to mark absent");
+        }
+        continue;
+      }
+
+      /* -------------------- HOLIDAY -------------------- */
+      if (text === "holiday") {
+        try {
+          await markHoliday(chatId);
+          await sendMessage(chatId, "📅 Today marked as HOLIDAY");
+        } catch (err) {
+          console.error("Holiday error:", err.message);
+          await sendMessage(chatId, "❌ Failed to mark holiday");
+        }
+        continue;
+      }
+
+      /* -------------------- SUMMARY -------------------- */
+      if (text === "summary") {
+        await sendMessage(
+          chatId,
+          "📊 Open your dashboard to view the AI attendance summary:\nhttps://attendance-09.vercel.app/?uid=" +
+            chatId
+        );
+        continue;
+      }
+
+      /* -------------------- DEFAULT -------------------- */
+      await sendMessage(
+        chatId,
+        "❓ I didn't understand that.\n\nUse:\n• present\n• absent <reason>\n• holiday\n• summary"
+      );
+    }
+  } catch (err) {
+    console.error("Polling error:", err.message);
+  }
+}
+
+/* -------------------- START -------------------- */
+setInterval(poll, 1200);
