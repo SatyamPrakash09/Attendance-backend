@@ -6,7 +6,8 @@ import User from "./models/User.js";
 /* -------------------- CONFIG -------------------- */
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const API_BASE = process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com";
+const API_BASE =
+  process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com";
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
@@ -18,16 +19,14 @@ console.log("🤖 Bot started");
 
 /* -------------------- STATE -------------------- */
 let offset = 0;
+const userSessions = new Map();
 
 /* -------------------- HELPERS -------------------- */
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text
-    })
+    body: JSON.stringify({ chat_id: chatId, text })
   });
 }
 
@@ -42,28 +41,21 @@ async function apiPost(path, userId, body = {}) {
   });
 
   const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || "API error");
-  }
+  if (!res.ok) throw new Error(data.message || "API error");
   return data;
 }
 
 async function markHoliday(userId) {
-  const res = await fetch(
-    `${API_BASE}/holiday?userId=${encodeURIComponent(userId)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-User-Id": userId
-      }
+  const res = await fetch(`${API_BASE}/holiday?userId=${userId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": userId
     }
-  );
+  });
 
   const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || "Holiday failed");
-  }
+  if (!res.ok) throw new Error(data.message || "Holiday failed");
   return data;
 }
 
@@ -81,90 +73,110 @@ async function poll() {
       if (!update.message?.text) continue;
 
       const chatId = update.message.chat.id.toString();
-      const text = update.message.text.trim().toLowerCase();
-      const firstName = update.message.from.first_name || "there";
-      const username = update.message.from.username || "";
+      const text = update.message.text.trim();
+      const lower = text.toLowerCase();
 
-      /* -------------------- /start -------------------- */
-      if (text === "/start") {
-        const existing = await User.findOne({ userId: chatId });
+      /* ---------- REGISTRATION FLOW ---------- */
+      const session = userSessions.get(chatId);
 
-        if (!existing) {
+      if (session) {
+        if (session.step === "name") {
+          session.name = text;
+          session.step = "email";
+          await sendMessage(chatId, "📧 Enter your email address:");
+          continue;
+        }
+
+        if (session.step === "email") {
+          if (!text.includes("@")) {
+            await sendMessage(chatId, "❌ Invalid email. Try again:");
+            continue;
+          }
+          session.email = text;
+          session.step = "section";
+          await sendMessage(chatId, "🏫 Enter your section (eg: CSE-A):");
+          continue;
+        }
+
+        if (session.step === "section") {
           await User.create({
             userId: chatId,
-            name: firstName,
-            username
+            name: session.name,
+            email: session.email,
+            section: text
           });
+
+          userSessions.delete(chatId);
 
           await sendMessage(
             chatId,
-            `👋 Hi ${firstName}!\n\nYour attendance tracker is ready.\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary`
+            "✅ Registration complete!\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary"
           );
-        } else {
+          continue;
+        }
+      }
+
+      /* ---------- COMMANDS ---------- */
+      if (lower === "/start") {
+        const existing = await User.findOne({ userId: chatId });
+
+        if (existing) {
           await sendMessage(
             chatId,
             `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
           );
+        } else {
+          userSessions.set(chatId, { step: "name" });
+          await sendMessage(chatId, "👋 Welcome! Please enter your full name:");
         }
         continue;
       }
 
-      /* -------------------- PRESENT -------------------- */
-      if (text === "present") {
+      if (lower === "present") {
         try {
-          await apiPost("/attendance", chatId, {
-            status: "Present"
-          });
-          await sendMessage(chatId, "✅ Present marked successfully");
-        } catch (err) {
-          console.error("Present error:", err.message);
+          await apiPost("/attendance", chatId, { status: "Present" });
+          await sendMessage(chatId, "✅ Present marked");
+        } catch {
           await sendMessage(chatId, "❌ Failed to mark present");
         }
         continue;
       }
 
-      /* -------------------- ABSENT -------------------- */
-      if (text.startsWith("absent")) {
-        const reason = text.replace("absent", "").trim() || "-";
+      if (lower.startsWith("absent")) {
+        const reason = text.replace(/absent/i, "").trim() || "-";
         try {
           await apiPost("/attendance", chatId, {
             status: "Absent",
             reason
           });
           await sendMessage(chatId, `❌ Absent marked\nReason: ${reason}`);
-        } catch (err) {
-          console.error("Absent error:", err.message);
+        } catch {
           await sendMessage(chatId, "❌ Failed to mark absent");
         }
         continue;
       }
 
-      /* -------------------- HOLIDAY -------------------- */
-      if (text === "holiday") {
+      if (lower === "holiday") {
         try {
           await markHoliday(chatId);
           await sendMessage(chatId, "📅 Today marked as HOLIDAY");
-        } catch (err) {
-          console.error("Holiday error:", err.message);
+        } catch {
           await sendMessage(chatId, "❌ Failed to mark holiday");
         }
         continue;
       }
 
-      /* -------------------- SUMMARY -------------------- */
-      if (text === "summary") {
+      if (lower === "summary") {
         await sendMessage(
           chatId,
-          "📊 Open your dashboard to view the AI attendance summary:\nhttps://attendance-09.vercel.app/?uid=" +
-            chatId
+          `📊 View your dashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
         );
         continue;
       }
 
-      /* -------------------- DEFAULT -------------------- */
       await sendMessage(
         chatId,
-        "❓ I didn't understand that.\n\nUse:\n• present\n• absent <reason>\n• holiday\n• summary"
+        "❓ Unknown command\n\nUse:\n• present\n• absent <reason>\n• holiday\n• summary"
       );
     }
   } catch (err) {
