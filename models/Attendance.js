@@ -17,6 +17,12 @@ const attendanceSchema = new mongoose.Schema({
   reason: {
     type: String,
     default: "-"
+  },
+  userName: {
+    type:String
+  },
+  userSection:{
+    type:String
   }
 });
 

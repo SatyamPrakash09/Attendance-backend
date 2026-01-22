@@ -7,7 +7,6 @@ import { connectDB } from "./db.js";
 import User from "./models/User.js";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
-import LoginToken from "./models/LoginToken.js";
 import { summarizeAttendance } from "./ai.js";
 
 const app = express();
@@ -68,8 +67,8 @@ app.post("/attendance", async (req, res) => {
     // }
 
     await Attendance.findOneAndUpdate(
-      { userId, date: today },     // ✅ FIX
-      { status, reason },          // ✅ FIX
+      { userId, date: today },     
+      { status, reason },         
       { upsert: true, new: true }
     );
 
@@ -98,7 +97,7 @@ app.post("/holiday", async (req, res) => {
     await Attendance.deleteOne({ userId, date: today });
 
     await Holiday.findOneAndUpdate(
-      { userId, date: today },          // ✅ FIXED
+      { userId, date: today },          
       { $set: { reason: "Declared by user" } },
       { upsert: true, new: true }
     );
@@ -123,13 +122,13 @@ app.get("/attendance/all", async (req, res) => {
 
     const attendance = await Attendance.find({ userId }).lean();
     const holidays = await Holiday.find({ userId }).lean();
-
+    const user = await User.find({userId}).lean();
+    console.log(user[0].name)
     const map = new Map();
 
     attendance.forEach(a =>
-      map.set(a.date, { date: a.date, status: a.status, reason: a.reason })
+      map.set(a.date, { date: a.date, status: a.status, reason: a.reason,name:user[0].name, section:user[0].section})
     );
-
     holidays.forEach(h => {
       if (!map.has(h.date)) {
         map.set(h.date, {
