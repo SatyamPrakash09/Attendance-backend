@@ -1,0 +1,14 @@
+name: Keep Backend Awake
+
+on:
+  schedule:
+    - cron: "28 3 * * *"   # 8:58 AM IST (03:28 UTC)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping
+        run: |
+          curl -fsS https://attendance-backend-hhkn.onrender.com/health || exit 0
