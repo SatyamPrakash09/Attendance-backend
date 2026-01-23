@@ -110,7 +110,7 @@ async function poll() {
 
           await sendMessage(
             chatId,
-            "✅ Registration complete!\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary"
+            `✅ Registration complete!\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
           );
           continue;
         }
