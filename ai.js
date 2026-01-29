@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
+import User from "./models/User.js";
 import "dotenv/config";
 
 if (!process.env.GEMINI_API_KEY) {

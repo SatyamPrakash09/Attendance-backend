@@ -58,7 +58,7 @@ app.post("/attendance", async (req, res) => {
       return res.status(400).json({ message: "UserId missing" });
     }
 
-    const { status, reason = "-" } = req.body;
+    const { status, reason = "Present" } = req.body;
     const today = getTodayIST();
     await Holiday.deleteOne({ userId, date: today });
     // const holiday = await Holiday.findOne({ userId, date: today });
@@ -150,9 +150,11 @@ app.get("/attendance/all", async (req, res) => {
 });
 
 /* -------------------- AI SUMMARY -------------------- */
-app.post("/attendance/summarize", auth, async (req, res) => {
+app.get("/attendance/summarize",  async (req, res) => {
   try {
-    const summary = await summarizeAttendance(req.userId);
+    const userId = req.query.userId || req.headers["x-user-id"];
+    if (!userId) return res.status(400).json({ message: "userId required" });
+    const summary = await summarizeAttendance(userId);
     res.json({ summary });
   } catch {
     res.status(500).json({ message: "AI failed" });
