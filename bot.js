@@ -7,7 +7,7 @@ import User from "./models/User.js";
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const API_BASE =
-  process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com";
+  process.env.API_BASE || "https://attendance-backend-beta-lovat.vercel.app";
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
