@@ -127,7 +127,6 @@ app.get("/attendance/all", async (req, res) => {
     const attendance = await Attendance.find({ userId }).lean();
     const holidays = await Holiday.find({ userId }).lean();
     const user = await User.find({userId}).lean();
-    console.log(user[0].name)
     const map = new Map();
 
     attendance.forEach(a =>

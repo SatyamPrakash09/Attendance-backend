@@ -3,12 +3,19 @@ import Attendance from "./models/Attendance.js";
 import Holiday from "./models/Holiday.js";
 import User from "./models/User.js";
 import "dotenv/config";
-
 if (!process.env.GEMINI_API_KEY) {
   throw new Error("GEMINI_API_KEY is missing");
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const key = process.env.GEMINI_API_KEY;
+if (!key || key.trim() === "") {
+  console.error("❌ GEMINI_API_KEY is missing or empty in .env");
+  // throw new Error("GEMINI_API_KEY is missing");
+} else {
+  console.log(`✅ Gemini API Key found (Length: ${key.length}, Starts with: ${key.substring(0, 4)}...)`);
+}
+
+const genAI = new GoogleGenerativeAI(key || "");
 
 export async function summarizeAttendance(userId,query) {
   if (!userId) {
@@ -65,8 +72,13 @@ export async function summarizeAttendance(userId,query) {
     - Only answer attendance-related questions.
     `;
 
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    try {
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (error) {
+      console.error("Gemini Query Error:", error.message);
+      return "I'm sorry, I couldn't process your query at the moment.";
+    }
   }
   
 
