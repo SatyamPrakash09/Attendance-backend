@@ -10,7 +10,7 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-export async function summarizeAttendance(userId) {
+export async function summarizeAttendance(userId,query) {
   if (!userId) {
     throw new Error("userId is required for summary");
   }
@@ -32,6 +32,43 @@ export async function summarizeAttendance(userId) {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash"
   });
+
+    //Case 4 User Query 
+  if(query){
+    const totalDays = attendance.length;
+    const present = attendance.filter(r => r.status === "Present").length;
+    const absent = attendance.filter(r => r.status === "Absent").length;
+
+    const attendanceDetails = attendance
+      .map(r => `${r.date}: ${r.status}`)
+      .join("\n");
+
+    const holidayDetails =
+      holidays.length > 0
+        ? holidays.map(h => h.date).join(", ")
+        : "None";
+        
+    const prompt = `You are an helpful assistant named Onix. Answer the user's query based on their attendance data below.
+    Total present days: ${present}
+    Total absent days: ${absent}
+    Holidays: ${holidayDetails}
+    
+    Attendance Details:
+    ${attendanceDetails}
+
+    User Query: ${query}
+
+    Follow these rules strictly:
+    - Do not use markdown symbols like **, *, or bullet icons.
+    - Do not use quotation marks.
+    - Keep the response short and professional.
+    - Only answer attendance-related questions.
+    `;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  }
+  
 
   try {
     // Case 2: Only holidays declared
@@ -102,6 +139,7 @@ User-declared holidays: <insert count of holidays declared by the student>
 If a category has zero count, explicitly mention it as 0.
 Use clear, formal, and professional language.
 `;
+
 
     const result = await model.generateContent(prompt);
     return result.response.text();

@@ -47,6 +47,10 @@ function getTodayIST() {
   });
 }
 
+/* -------------------- LOGIN -------------------- */
+
+
+
 /* -------------------- HEALTH -------------------- */
 app.get("/health", (_, res) => res.send("OK"));
 
@@ -158,6 +162,22 @@ app.get("/attendance/summarize",  async (req, res) => {
     res.json({ summary });
   } catch {
     res.status(500).json({ message: "AI failed" });
+  }
+});
+
+app.post("/attendance/query", async (req, res) => {
+  try {
+    const userId = req.body.userId || req.headers["x-user-id"];
+    const { query } = req.body;
+
+    if (!userId) return res.status(400).json({ message: "userId required" });
+    if (!query) return res.status(400).json({ message: "query required" });
+
+    const response = await summarizeAttendance(userId, query);
+    res.json({ response });
+  } catch (error) {
+    console.error("POST /attendance/query ERROR:", error);
+    res.status(500).json({ message: "AI query failed" });
   }
 });
 
