@@ -44,10 +44,6 @@ async function sendMessage(chatId, text) {
   }
 }
 
-/* ------------------ TEST CRON (every minute) ------------------ */
-cron.schedule("* * * * *", () => {
-  console.log("🧪 Cron heartbeat:", new Date().toISOString());
-});
 
 /* =====================================================
    ⏰ MORNING PROMPT — 9:00 AM IST (03:30 UTC)
