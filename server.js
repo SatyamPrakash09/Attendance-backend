@@ -15,27 +15,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* -------------------- AUTH -------------------- */
-function auth(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-  const userId = req.headers["x-user-id"] || req.query.userId;
-
-  if (!token || !userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const validToken = crypto
-    .createHash("sha256")
-    .update(userId + process.env.JWT_SECRET)
-    .digest("hex");
-
-  if (token !== validToken) {
-    return res.status(401).json({ message: "Invalid token" });
-  }
-
-  req.userId = userId;
-  next();
-}
 
 /* -------------------- DB -------------------- */
 await connectDB();
@@ -55,6 +34,7 @@ function getTodayIST() {
 app.get("/health", (_, res) => res.send("OK"));
 
 /* -------------------- ATTENDANCE -------------------- */
+
 app.post("/attendance", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] || req.query.userId;
@@ -65,10 +45,6 @@ app.post("/attendance", async (req, res) => {
     const { status, reason = "Present" } = req.body;
     const today = getTodayIST();
     await Holiday.deleteOne({ userId, date: today });
-    // const holiday = await Holiday.findOne({ userId, date: today });
-    // if (holiday) {
-    //   return res.json({ message: "Holiday — attendance ignored" });
-    // }
 
     await Attendance.findOneAndUpdate(
       { userId, date: today },     
@@ -87,6 +63,76 @@ app.post("/attendance", async (req, res) => {
   }
 });
 
+
+/* -------------------- Update Present/Absent -------------------- */
+app.put("/attendance", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
+
+    const { status, reason = "Present" } = req.body;
+    const today = getTodayIST();
+    await Holiday.deleteOne({ userId, date: today });
+
+    await Attendance.findOneAndUpdate(
+      { userId, date: today },     
+      { status, reason },         
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      message: "Attendance saved",
+      date: today,
+      userId
+    });
+  } catch (err) {
+    console.error("POST /attendance ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/* ---------- EDIT PAST ATTENDANCE ---------- */
+app.put("/attendance", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
+
+    const { date, status, reason = "-" } = req.body;
+
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
+      return res.status(400).json({ message: "Invalid date. Use YYYY-MM-DD format." });
+    }
+
+    // Reject future dates
+    const today = getTodayIST();
+    if (date > today) {
+      return res.status(400).json({ message: "Cannot mark attendance for a future date." });
+    }
+
+    // Remove any holiday entry for this date
+    await Holiday.deleteOne({ userId, date });
+
+    await Attendance.findOneAndUpdate(
+      { userId, date },
+      { status, reason },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      message: "Attendance updated",
+      date,
+      userId
+    });
+  } catch (err) {
+    console.error("PUT /attendance ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 /* -------------------- HOLIDAY -------------------- */
@@ -117,6 +163,46 @@ app.post("/holiday", async (req, res) => {
   }
 });
 
+/* ---------- EDIT PAST HOLIDAY ---------- */
+app.put("/holiday", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "UserId missing" });
+    }
+
+    const { date } = req.body;
+
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
+      return res.status(400).json({ message: "Invalid date. Use YYYY-MM-DD format." });
+    }
+
+    // Reject future dates
+    const today = getTodayIST();
+    if (date > today) {
+      return res.status(400).json({ message: "Cannot mark holiday for a future date." });
+    }
+
+    // Remove any attendance entry for this date
+    await Attendance.deleteOne({ userId, date });
+
+    await Holiday.findOneAndUpdate(
+      { userId, date },
+      { $set: { reason: "Declared by user" } },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      message: "Holiday updated",
+      date,
+      userId
+    });
+  } catch (err) {
+    console.error("PUT /holiday ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 /* -------------------- GET ALL -------------------- */
 app.get("/attendance/all", async (req, res) => {
@@ -129,9 +215,16 @@ app.get("/attendance/all", async (req, res) => {
     const user = await User.find({userId}).lean();
     const map = new Map();
 
-    attendance.forEach(a =>
-      map.set(a.date, { date: a.date, status: a.status, reason: a.reason,name:user[0].name, section:user[0].section})
-    );
+    attendance.forEach(a => {
+      const u = user.find(usr => usr.userId === a.userId);
+      map.set(a.date, { 
+        date: a.date, 
+        status: a.status, 
+        reason: a.reason,
+        name: u?.name || "Unknown", 
+        section: u?.section || "N/A"
+      });
+    });
     holidays.forEach(h => {
       if (!map.has(h.date)) {
         map.set(h.date, {
@@ -189,7 +282,7 @@ app.get("/user", async (req, res) => {
 });
 
 /* -------------------- SERVER -------------------- */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT ;
 app.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
