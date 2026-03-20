@@ -24,6 +24,7 @@ function getTodayIST() {
 }
 
 /* -------------------- LOGIN -------------------- */
+// TODO
 
 
 
@@ -52,7 +53,6 @@ app.post("/attendance", async (req, res) => {
     res.json({
       message: "Attendance saved",
       date: today,
-      userId
     });
   } catch (err) {
     console.error("POST /attendance ERROR:", err);
@@ -92,8 +92,7 @@ app.put("/attendance", async (req, res) => {
 
     res.json({
       message: "Attendance updated",
-      date,
-      userId
+      date
     });
   } catch (err) {
     console.error("PUT /attendance ERROR:", err);
@@ -162,8 +161,7 @@ app.put("/holiday", async (req, res) => {
 
     res.json({
       message: "Holiday updated",
-      date,
-      userId
+      date
     });
   } catch (err) {
     console.error("PUT /holiday ERROR:", err);
