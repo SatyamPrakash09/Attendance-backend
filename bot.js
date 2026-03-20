@@ -6,8 +6,8 @@ import User from "./models/User.js";
 /* -------------------- CONFIG -------------------- */
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const API_BASE =
-  process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com/";
+const API_BASE = process.env.API_BASE || "https://attendance-backend-hhkn.onrender.com/";
+const DASHBOARD_URL = process.env.DASHBOARD_URL || "https://attendance-09.vercel.app/";
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN missing");
@@ -33,6 +33,21 @@ async function sendMessage(chatId, text) {
 async function apiPost(path, userId, body = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": userId
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "API error");
+  return data;
+}
+
+async function apiPut(path, userId, body = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       "X-User-Id": userId
@@ -110,7 +125,7 @@ async function poll() {
 
           await sendMessage(
             chatId,
-            `✅ Registration complete!\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+            `✅ Registration complete!\n\nCommands:\n• present\n• absent <reason>\n• holiday\n• summary\nDashboard:\n${DASHBOARD_URL}?uid=${chatId}`
           );
           continue;
         }
@@ -123,7 +138,7 @@ async function poll() {
         if (existing) {
           await sendMessage(
             chatId,
-            `👋 Welcome back ${existing.name}!\n\nDashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+            `👋 Welcome back ${existing.name}!\n\nDashboard:\n${DASHBOARD_URL}?uid=${chatId}`
           );
         } else {
           userSessions.set(chatId, { step: "name" });
@@ -169,14 +184,46 @@ async function poll() {
       if (lower === "summary") {
         await sendMessage(
           chatId,
-          `📊 View your dashboard:\nhttps://attendance-09.vercel.app/?uid=${chatId}`
+          `📊 View your dashboard:\n${DASHBOARD_URL}?uid=${chatId}`
         );
+        continue;
+      }
+
+      /* ---------- EDIT PAST DATE ---------- */
+      if (lower.startsWith("edit ")) {
+        // Expected: edit YYYY-MM-DD present | edit YYYY-MM-DD absent <reason> | edit YYYY-MM-DD holiday
+        const parts = text.split(/\s+/);
+        const date = parts[1];
+        const action = (parts[2] || "").toLowerCase();
+
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
+          await sendMessage(chatId, "❌ Invalid date. Use: edit YYYY-MM-DD present/absent/holiday");
+          continue;
+        }
+
+        try {
+          if (action === "present") {
+            await apiPut("/attendance", chatId, { date, status: "Present", reason: "Present" });
+            await sendMessage(chatId, `✅ ${date} marked as PRESENT`);
+          } else if (action === "absent") {
+            const reason = parts.slice(3).join(" ") || "-";
+            await apiPut("/attendance", chatId, { date, status: "Absent", reason });
+            await sendMessage(chatId, `❌ ${date} marked as ABSENT\nReason: ${reason}`);
+          } else if (action === "holiday") {
+            await apiPut("/holiday", chatId, { date });
+            await sendMessage(chatId, `📅 ${date} marked as HOLIDAY`);
+          } else {
+            await sendMessage(chatId, "❌ Use: edit YYYY-MM-DD present/absent <reason>/holiday");
+          }
+        } catch (err) {
+          await sendMessage(chatId, `❌ Failed: ${err.message}`);
+        }
         continue;
       }
 
       await sendMessage(
         chatId,
-        "❓ Unknown command\n\nUse:\n• present\n• absent <reason>\n• holiday\n• summary"
+        "❓ Unknown command\n\nUse:\n• present\n• absent <reason>\n• holiday\n• summary\n• edit YYYY-MM-DD present/absent/holiday"
       );
     }
   } catch (err) {
