@@ -137,7 +137,7 @@ app.put("/holiday", async (req, res) => {
       return res.status(400).json({ message: "UserId missing" });
     }
 
-    const { date } = req.body;
+    const { date, reason } = req.body;
 
     // Validate date format
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
@@ -155,7 +155,7 @@ app.put("/holiday", async (req, res) => {
 
     await Holiday.findOneAndUpdate(
       { userId, date },
-      { $set: { reason: "Declared by user" } },
+      { $set: { reason: reason || "Declared by user" } },
       { upsert: true, new: true }
     );
 
