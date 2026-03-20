@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import crypto from "crypto";
 
 import { connectDB } from "./db.js";
 import User from "./models/User.js";
@@ -15,8 +14,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
-/* -------------------- DB -------------------- */
 await connectDB();
 
 /* -------------------- HELPERS -------------------- */
@@ -36,36 +33,6 @@ app.get("/health", (_, res) => res.send("OK"));
 /* -------------------- ATTENDANCE -------------------- */
 
 app.post("/attendance", async (req, res) => {
-  try {
-    const userId = req.headers["x-user-id"] || req.query.userId;
-    if (!userId) {
-      return res.status(400).json({ message: "UserId missing" });
-    }
-
-    const { status, reason = "Present" } = req.body;
-    const today = getTodayIST();
-    await Holiday.deleteOne({ userId, date: today });
-
-    await Attendance.findOneAndUpdate(
-      { userId, date: today },     
-      { status, reason },         
-      { upsert: true, new: true }
-    );
-
-    res.json({
-      message: "Attendance saved",
-      date: today,
-      userId
-    });
-  } catch (err) {
-    console.error("POST /attendance ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-/* -------------------- Update Present/Absent -------------------- */
-app.put("/attendance", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] || req.query.userId;
     if (!userId) {
@@ -282,7 +249,7 @@ app.get("/user", async (req, res) => {
 });
 
 /* -------------------- SERVER -------------------- */
-const PORT = process.env.PORT ;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
