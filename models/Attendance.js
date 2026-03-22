@@ -16,7 +16,7 @@ const attendanceSchema = new mongoose.Schema({
   },
   reason: {
     type: String,
-    default: "-"
+    default: "Present"
   },
   userName: {
     type:String
@@ -24,7 +24,7 @@ const attendanceSchema = new mongoose.Schema({
   userSection:{
     type:String
   }
-});
+},{timestamps:true} );
 
 // ✅ one attendance per user per date
 attendanceSchema.index(

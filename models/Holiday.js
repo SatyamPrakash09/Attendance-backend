@@ -4,7 +4,7 @@ const holidaySchema = new mongoose.Schema({
   userId: { type: String, required: true },
   date: { type: String, required: true },
   reason: String
-});
+},{timestamps:true});
 
 // chat_id + date must be unique (only one holiday record per user per date)
 // userId + date must be unique (only one holiday record per user per date)
